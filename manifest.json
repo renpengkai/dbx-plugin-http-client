@@ -1,5 +1,5 @@
 {
-  "$schema": "https://raw.githubusercontent.com/t8y2/dbx/plugin-sdk-v1/plugins/manifest.schema.json",
+  "$schema": "https://raw.githubusercontent.com/t8y2/dbx/main/plugins/manifest.schema.json",
   "manifest_version": 1,
   "id": "com.jettech.httpclient",
   "name": "HTTP Client",
@@ -7,8 +7,8 @@
   "publisher": "jettech",
   "description": "A Postman-style HTTP workbench: compose requests, send them through a native sidecar, and inspect responses.",
   "icon": "assets/plugin.svg",
-  "source": "https://github.com/jettech/dbx-plugin-http-client",
-  "homepage": "https://github.com/jettech/dbx-plugin-http-client#readme",
+  "source": "https://github.com/renpengkai/dbx-plugin-http-client",
+  "homepage": "https://github.com/renpengkai/dbx-plugin-http-client#readme",
   "engines": {
     "dbx": ">=0.5.68",
     "host_api": "1"

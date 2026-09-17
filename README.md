@@ -59,10 +59,12 @@ dbx-http-client/
 │   ├── store.go                   # 配置持久化（0600，原子写）
 │   └── go.mod
 ├── tools/                         # 测试脚手架（不属于发布产物）
-│   ├── sidecar-smoke-test.py      # 协议级冒烟测试：直连 Sidecar 跑 40+ 断言
-│   ├── ui-e2e-test.mjs            # jsdom 端到端：真实 UI + 真实 Sidecar，33 项断言
+│   ├── sidecar-smoke-test.py      # 协议级冒烟测试：直连 Sidecar 跑 41 项断言
+│   ├── ui-e2e-test.mjs            # jsdom 端到端：真实 UI + 真实 Sidecar，36 项断言
 │   ├── test-target-server.py      # 上述两个测试共用的目标 HTTP 服务器
 │   └── run-ui-e2e.sh              # 一键跑端到端测试（自动起停目标服务器）
+├── LICENSE                        # Apache License 2.0 全文
+├── NOTICE                         # 版权署名
 └── .github/workflows/plugin-release.yml
 ```
 
@@ -230,3 +232,20 @@ replacer**（`replace(pattern, () => payload)`）——若用字符串替换，�
 | 工作台整个被一层黑色遮罩盖住、点不动 | 浮层容器 `.hc-modal-layer` 设了 `display: grid`，压过了浏览器默认的 `[hidden] { display: none }`；`app.css` 里那条 `[hidden] { display: none !important; }` 全局复位被删掉了 |
 | 改了 `ui/` 下的文件但页面没变 | dev host 的文件监听只覆盖后端源码与 `manifest.json`，不监听 `ui/`；手动刷新页面即可（每次构建 frame 都会重新从磁盘读取资源） |
 | CSP 报错、界面空白 | 确认 `ui/` 内没有引用 CDN、外链字体或 ES module 之间的相对导入（宿主会把本地脚本内联为 `<script>`） |
+
+## 11. 许可证
+
+Apache License 2.0，全文见 [`LICENSE`](LICENSE)，版权署名见 [`NOTICE`](NOTICE)。
+
+```
+Copyright 2026 renpengkai
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+```
+
+选用 Apache-2.0 的一个附带好处：它包含明确的专利授权条款（第 3 条），
+对会被第三方集成、分发的插件来说比 MIT 更稳妥。分发时请一并保留 `LICENSE` 与 `NOTICE`。
