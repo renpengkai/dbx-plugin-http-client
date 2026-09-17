@@ -462,10 +462,14 @@ func classifyError(err error) *requestError {
 	if errors.As(err, &opErr) {
 		return newRequestError("connection", "连接失败："+err.Error())
 	}
-	var urlErr *url.Error
-	if errors.As(err, &urlErr) {
-		return newRequestError("invalid-url", err.Error())
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return newRequestError("network", "连接被中断，响应未完整读取："+err.Error())
 	}
+	// Everything left is a transport failure, never a URL problem: http.Client.Do
+	// wraps *every* failure in *url.Error, so that type says nothing about the URL.
+	// Real URL errors are already reported by buildRequest before anything is sent,
+	// so mapping *url.Error to "invalid-url" here merely mislabels network faults
+	// (an unresolvable host surfacing as a bare EOF, for one).
 	return newRequestError("network", err.Error())
 }
 
