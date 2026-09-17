@@ -65,6 +65,7 @@ dbx-http-client/
 │   └── run-ui-e2e.sh              # 一键跑端到端测试（自动起停目标服务器）
 ├── LICENSE                        # Apache License 2.0 全文
 ├── NOTICE                         # 版权署名
+├── .dbx-store.json                # 商店元数据（许可证、标签、主页等，仅首次上架需要）
 └── .github/workflows/plugin-release.yml
 ```
 
@@ -124,6 +125,11 @@ Sidecar 通过 stdout 的 JSON Lines 收发 protocol v1 报文；stdout 只留�
 `bodyTruncated`；失败时 `ok:false` 且带 `error: { kind, message }`
 （`kind` ∈ `timeout|canceled|dns|tls|connection|invalid-url|invalid-body|invalid-proxy|network`）。
 
+`invalid-url` 只表示**请求发出前就判定 URL 不可用**（无法解析、缺协议前缀、协议非 http/https、
+缺主机名）。请求一旦发出，任何传输层故障都归为 `connection` / `dns` / `tls` / `timeout` / `network`。
+两者不可混淆：`http.Client.Do` 会把**所有**失败都包成 `*url.Error`，因此不能拿它作为 URL 非法的判据。
+某个域名解析不出来、被中间设备重置、或响应读到一半断开，都应落在 `network`。
+
 事件（`host.events`）：`http/progress` → `{ requestId, phase: "sending"|"receiving", received? }`。
 
 ## 5. 数据与持久化
@@ -152,7 +158,7 @@ dbx-plugin dev --path . --port 5190
 开发宿主不会替你安装依赖或翻译文案；`.dbx-dev/` 里是明文调试数据，已在 `.gitignore` 中。
 改动 `ui/` 后刷新页面即可；改动 `backend/` 后重启 `dbx-plugin dev`。
 
-协议级回归（推荐在打包前跑一遍，40+ 断言覆盖正常、边界与失败路径）：
+协议级回归（推荐在打包前跑一遍，41 项断言覆盖正常、边界与失败路径）：
 
 ```bash
 go build -o dist/backend ./backend
@@ -166,11 +172,34 @@ dbx-plugin package .
 ```
 
 CLI 会为当前平台构建原生后端、暂存 `manifest.json` / `assets/` / `ui/`，并在 `dist/` 生成
-未签名的 `.dbxp` 候选包与 `.artifact.json` 元数据。发布 GitHub Release 后，
-`.github/workflows/plugin-release.yml` 会复用 `t8y2/dbx` 的可复用工作流，为各平台构建未签名候选产物；
-商店审核通过后由 DBX Store 用官方仓库密钥签名并回写安装包。
+未签名的 `.dbxp` 候选包与 `.artifact.json` 元数据。
 
-> 只提交本仓库的源码与未签名候选包，不要向 `t8y2/dbx` 提交普通插件源码。
+**发布 Release。** 打 tag 并发布 GitHub Release 后，`.github/workflows/plugin-release.yml` 会调用
+`t8y2/dbx` 的可复用工作流，按目标平台构建未签名候选包，并合并出 `release-candidates.json`：
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+gh release create v0.1.0 --title v0.1.0 --notes "首个版本"
+```
+
+该工作流有两处**必须注意**的配置：
+
+- `uses:` 固定到不可变的 tag `@v0.6.15`。脚手架模板生成的是 `@plugin-sdk-v1`，
+  而这个 ref 在 `t8y2/dbx` 里**既不是分支也不是 tag**，会导致整个工作流无法加载。
+  需要更新打包行为时，显式改这个 tag。
+- `plugin-cli-version` 固定为 `0.1.9`，与本仓库开发和验证所用的 CLI 版本一致；
+  脚手架模板里的 `0.1.6` 会用一个不同的打包器产出发布件。
+
+**提交商店。** 官方流程是 `dbx-store` 的同步工作流读取 Release 里的 `release-candidates.json`，
+在 `t8y2/dbx-store` 上自动创建候选 PR，维护者审核签名后才进入官方目录。
+
+- **不要把 `.dbxp` 提交进 Git 历史**，它只作为 Release 资产分发。
+- `manifest.json` 里**没有** `license` 字段（顶层 `additionalProperties: false`），
+  商店展示用的许可证、标签、主页等写在 `.dbx-store.json` 里；该文件只在首次上架或
+  主动修改商店信息时需要，发新版本不必改动。
+- 插件源码留在本仓库，只有需要改 DBX Host / SDK / CLI / 协议 / Schema 时才向 `t8y2/dbx` 提 PR。
+
+> 本地测试未签名包时，需要在插件中心显式开启「允许安装未签名开发包」。
 
 ## 8. 测试
 
@@ -232,6 +261,7 @@ replacer**（`replace(pattern, () => payload)`）——若用字符串替换，�
 | 工作台整个被一层黑色遮罩盖住、点不动 | 浮层容器 `.hc-modal-layer` 设了 `display: grid`，压过了浏览器默认的 `[hidden] { display: none }`；`app.css` 里那条 `[hidden] { display: none !important; }` 全局复位被删掉了 |
 | 改了 `ui/` 下的文件但页面没变 | dev host 的文件监听只覆盖后端源码与 `manifest.json`，不监听 `ui/`；手动刷新页面即可（每次构建 frame 都会重新从磁盘读取资源） |
 | CSP 报错、界面空白 | 确认 `ui/` 内没有引用 CDN、外链字体或 ES module 之间的相对导入（宿主会把本地脚本内联为 `<script>`） |
+| 发 Release 后工作流报 `workflow was not found` | `plugin-release.yml` 的 `uses:` 指向了不存在的 ref。脚手架模板给的 `@plugin-sdk-v1` 在 `t8y2/dbx` 里不存在；改用有效 tag（仓库当前固定为 `v0.6.15`） |
 
 ## 11. 许可证
 
@@ -249,3 +279,11 @@ You may obtain a copy of the License at
 
 选用 Apache-2.0 的一个附带好处：它包含明确的专利授权条款（第 3 条），
 对会被第三方集成、分发的插件来说比 MIT 更稳妥。分发时请一并保留 `LICENSE` 与 `NOTICE`。
+
+许可证在三个地方各司其职，不要混淆：
+
+| 位置 | 作用 |
+| --- | --- |
+| `LICENSE` | 法律文本本体，分发时必须随附 |
+| `NOTICE` | 版权署名，Apache-2.0 推荐放在这里 |
+| `.dbx-store.json` 的 `license` | **商店展示用**。`manifest.json` 是运行时清单，顶层 `additionalProperties: false` 且没有 `license` 字段，所以许可证不能写在那里 |

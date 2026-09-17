@@ -9,10 +9,16 @@ permissions:
 
 jobs:
   release:
-    uses: t8y2/dbx/.github/workflows/plugin-release-reusable.yml@plugin-sdk-v1
+    # Pinned to an immutable tag. The scaffold template points at `@plugin-sdk-v1`,
+    # which does not exist in t8y2/dbx (neither branch nor tag), so the workflow
+    # fails to load at all — GitHub cannot resolve the reusable workflow ref.
+    # Bump this tag deliberately when you want newer packaging behaviour.
+    uses: t8y2/dbx/.github/workflows/plugin-release-reusable.yml@v0.6.15
     with:
       release-tag: ${{ github.event.release.tag_name }}
       package-command: dbx-plugin package .
       package-path: dist/*.dbxp
       metadata-path: dist/*.artifact.json
-      plugin-cli-version: 0.1.6
+      # Matches the CLI version this repo is developed and tested against
+      # (`npx @dbx-app/plugin-cli` resolves to 0.1.9).
+      plugin-cli-version: 0.1.9

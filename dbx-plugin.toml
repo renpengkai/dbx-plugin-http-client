@@ -6,4 +6,6 @@ directory = "backend"
 binary = "dbx-plugin-http-client"
 
 [package]
-include = ["assets", "ui"]
+# LICENSE / NOTICE ride along so every distributed .dbxp carries the license copy
+# Apache-2.0 section 4(a) requires.
+include = ["assets", "ui", "LICENSE", "NOTICE"]

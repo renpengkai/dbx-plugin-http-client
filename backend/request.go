@@ -67,12 +67,12 @@ type authConfig struct {
 }
 
 type requestOptions struct {
-	TimeoutMs      int   `json:"timeoutMs"`
-	FollowRedirect *bool `json:"followRedirects"`
-	MaxRedirects   int   `json:"maxRedirects"`
-	VerifyTLS      *bool `json:"verifyTls"`
-	MaxBodyBytes   int64 `json:"maxBodyBytes"`
-	ProgressEvents bool  `json:"progressEvents"`
+	TimeoutMs      int    `json:"timeoutMs"`
+	FollowRedirect *bool  `json:"followRedirects"`
+	MaxRedirects   int    `json:"maxRedirects"`
+	VerifyTLS      *bool  `json:"verifyTls"`
+	MaxBodyBytes   int64  `json:"maxBodyBytes"`
+	ProgressEvents bool   `json:"progressEvents"`
 	ProxyMode      string `json:"proxyMode"` // environment | direct | custom
 	ProxyURL       string `json:"proxyUrl"`
 }
