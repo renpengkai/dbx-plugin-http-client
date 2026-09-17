@@ -1,0 +1,49 @@
+{
+  "$schema": "https://raw.githubusercontent.com/t8y2/dbx/plugin-sdk-v1/plugins/manifest.schema.json",
+  "manifest_version": 1,
+  "id": "com.jettech.httpclient",
+  "name": "HTTP Client",
+  "version": "0.1.0",
+  "publisher": "jettech",
+  "description": "A Postman-style HTTP workbench: compose requests, send them through a native sidecar, and inspect responses.",
+  "icon": "assets/plugin.svg",
+  "source": "https://github.com/jettech/dbx-plugin-http-client",
+  "homepage": "https://github.com/jettech/dbx-plugin-http-client#readme",
+  "engines": {
+    "dbx": ">=0.5.68",
+    "host_api": "1"
+  },
+  "permissions": ["host.events"],
+  "entrypoints": {
+    "backend": {
+      "protocol_versions": [1],
+      "transport": "stdio-jsonl",
+      "executable": "bin/dbx-plugin-http-client"
+    },
+    "ui": {
+      "root": "ui",
+      "entry": "ui/index.html"
+    }
+  },
+  "contributions": [
+    {
+      "type": "workbench",
+      "id": "com.jettech.httpclient.workbench",
+      "label": "HTTP Client",
+      "description": "Compose and send HTTP requests, inspect responses, keep collections and environments.",
+      "icon": "assets/plugin.svg"
+    }
+  ],
+  "localizations": {
+    "zh-CN": {
+      "name": "HTTP 客户端",
+      "description": "类似 Postman 的 HTTP 接口调试工作台：构造请求、通过原生 Sidecar 发送并查看响应。",
+      "contributions": {
+        "com.jettech.httpclient.workbench": {
+          "label": "HTTP 客户端",
+          "description": "构造并发送 HTTP 请求、查看响应，管理集合与环境变量。"
+        }
+      }
+    }
+  }
+}
