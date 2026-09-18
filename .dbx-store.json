@@ -7,7 +7,7 @@
   "source": "https://github.com/renpengkai/dbx-plugin-http-client",
   "homepage": "https://github.com/renpengkai/dbx-plugin-http-client",
   "license": "Apache-2.0",
-  "releaseNotes": "首个版本。完整的 HTTP 调试工作台：8 种方法、四类请求体、三种认证、多标签页、集合/历史/环境变量、cURL 导入导出。响应侧提供跳转链路、耗时与 TTFB、JSON 高亮、响应头与 Cookie 视图，超过内联上限的响应可分块加载完整内容。所有网络请求经 protocol v1 委派给 Go 原生 Sidecar（工作台沙箱的 CSP 禁止直接发起网络请求）。",
+  "releaseNotes": "0.1.1：工作台请求方法、环境、Content-Type 三个选择框统一为扁平样式，明暗主题下视觉一致。其余能力与 0.1.0 相同：8 种方法、四类请求体、三种认证、多标签页、集合/历史/环境变量、cURL 导入导出；响应侧提供跳转链路、耗时与 TTFB、JSON 高亮、响应头与 Cookie 视图。所有网络请求经 protocol v1 委派给 Go 原生 Sidecar。",
   "localizations": {
     "zh-CN": {
       "name": "HTTP 客户端",

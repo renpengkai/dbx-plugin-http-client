@@ -178,8 +178,8 @@ CLI 会为当前平台构建原生后端、暂存 `manifest.json` / `assets/` / 
 `t8y2/dbx` 的可复用工作流，按目标平台构建未签名候选包，并合并出 `release-candidates.json`：
 
 ```bash
-git tag v0.1.0 && git push origin v0.1.0
-gh release create v0.1.0 --title v0.1.0 --notes "首个版本"
+git tag v0.1.1 && git push origin v0.1.1
+gh release create v0.1.1 --title v0.1.1 --notes "扁平化方法 / 环境 / Content-Type 选择框"
 ```
 
 该工作流有两处**必须注意**的配置：

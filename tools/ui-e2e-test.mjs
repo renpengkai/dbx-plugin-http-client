@@ -252,6 +252,10 @@ async function main() {
     /\[hidden\][^{]*\{[^}]*display\s*:\s*none/i.test(cssText),
     "app.css lost its `[hidden] { display: none !important; }` reset — the modal overlay would block the whole workbench");
   check("modal layer starts hidden", $("#modal-host").hasAttribute("hidden"));
+  check("flat select chrome is defined once for method/env/content-type",
+    cssText.includes(".hc-select-flat") && /appearance\s*:\s*none/.test(cssText));
+  check("method and environment selects share the flat class",
+    $("#method-select").classList.contains("hc-select-flat") && $("#env-select").classList.contains("hc-select-flat"));
 
   /* ---------------------------------------------------- 1. simple GET ---- */
   setInput($("#url-input"), `${BASE}/users`);
@@ -311,6 +315,8 @@ async function main() {
   setInput($("#request-panels .hc-textarea"), '{"name":"杰特","role":"engineer"}');
   const contentTypeSelect = $$("#request-panels select").find((select) => select.value === "application/json");
   check("raw body content-type defaults to JSON", !!contentTypeSelect);
+  check("content-type select uses the shared flat chrome",
+    !!(contentTypeSelect && contentTypeSelect.id === "content-type-select" && contentTypeSelect.classList.contains("hc-select-flat")));
 
   const headerSection = $$("#request-sections .hc-section").find((button) => button.textContent.trim().startsWith("请求头"));
   headerSection.click();
