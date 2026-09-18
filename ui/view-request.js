@@ -223,7 +223,7 @@
     }
 
     if (tab.body.mode === "raw") {
-      const contentTypeSelect = el("select", { class: "hc-select" });
+      const contentTypeSelect = el("select", { id: "content-type-select", class: "hc-select hc-select-flat" });
       CONTENT_TYPES.forEach((type) => contentTypeSelect.append(el("option", { value: type, text: type || t("body.noContentType") })));
       contentTypeSelect.value = tab.body.contentType || "application/json";
       contentTypeSelect.addEventListener("change", () => { tab.body.contentType = contentTypeSelect.value; markChanged(tab); });

@@ -17,7 +17,7 @@
         <div class="hc-grow"></div>
         <label class="hc-field hc-field-inline">
           <span class="hc-field-label" id="label-environment">环境</span>
-          <select id="env-select" class="hc-select"></select>
+          <select id="env-select" class="hc-select hc-select-flat"></select>
         </label>
         <button class="hc-btn hc-btn-ghost" id="btn-import-curl" type="button">导入 cURL</button>
         <button class="hc-btn hc-btn-ghost" id="btn-settings" type="button">设置</button>
@@ -40,7 +40,7 @@
 
           <section class="hc-request" id="request-pane">
             <div class="hc-url-row">
-              <select id="method-select" class="hc-select hc-method" aria-label="HTTP 方法"></select>
+              <select id="method-select" class="hc-select hc-select-flat hc-method" aria-label="HTTP 方法"></select>
               <div class="hc-url-wrap">
                 <input id="url-input" class="hc-input hc-url" type="text" spellcheck="false" autocomplete="off"
                        placeholder="https://api.example.com/users" />

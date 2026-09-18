@@ -108,6 +108,51 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .hc-select:focus, .hc-input:focus, .hc-textarea:focus { border-color: var(--hc-primary); outline: none; }
 .hc-input::placeholder { color: color-mix(in srgb, var(--hc-muted-fg) 80%, transparent); }
 
+/* Flat native <select> chrome shared by method / environment / Content-Type.
+   `appearance: none` strips OS 3-D bevels so the three controls match; the caret
+   is a CSS triangle that tracks --hc-muted-fg in both light and dark themes. */
+.hc-select-flat {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 28px 0 10px;
+  border: 1px solid var(--hc-border);
+  border-radius: var(--hc-radius-sm);
+  background-color: var(--hc-card);
+  color: var(--hc-fg);
+  box-shadow: none;
+  cursor: pointer;
+  line-height: 28px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--hc-muted-fg) 50%),
+    linear-gradient(135deg, var(--hc-muted-fg) 50%, transparent 50%);
+  background-position:
+    calc(100% - 16px) calc(50% - 1.5px),
+    calc(100% - 11px) calc(50% - 1.5px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+.hc-select-flat:hover {
+  background-color: var(--hc-hover);
+  border-color: color-mix(in srgb, var(--hc-primary) 35%, var(--hc-border));
+}
+.hc-select-flat:focus, .hc-select-flat:focus-visible {
+  border-color: var(--hc-primary);
+  outline: none;
+  box-shadow: none;
+}
+.hc-select-flat:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+.hc-select-flat option {
+  background-color: var(--hc-card);
+  color: var(--hc-fg);
+}
+#env-select.hc-select-flat { min-width: 148px; max-width: 220px; }
+#content-type-select.hc-select-flat { min-width: 180px; }
+
 .hc-btn {
   display: inline-flex; align-items: center; gap: 6px; border: 1px solid transparent;
   border-radius: var(--hc-radius-sm); padding: 5px 12px; background: var(--hc-muted);
@@ -175,7 +220,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .hc-request { display: flex; flex-direction: column; flex: 1 1 45%; min-height: 120px; padding: 10px; gap: 8px; overflow: hidden; }
 
 .hc-url-row { display: flex; align-items: center; gap: 6px; }
-.hc-method { flex: 0 0 auto; width: 104px; font-weight: 600; font-family: var(--hc-mono); }
+.hc-method { flex: 0 0 auto; width: 118px; font-weight: 600; font-family: var(--hc-mono); }
 .hc-url-wrap { position: relative; flex: 1; display: flex; }
 .hc-url { flex: 1; font-family: var(--hc-mono); padding-right: 44px; }
 .hc-url-flag {

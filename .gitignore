@@ -1,4 +1,7 @@
 /dist/
+*.dbxp
+*.artifact.json
+release-candidates.json
 /.dbx-dev/
 /.uitest/
 # `go build` in ./backend drops the sidecar binary here (name comes from
