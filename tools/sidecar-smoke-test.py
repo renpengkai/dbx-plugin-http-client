@@ -89,6 +89,7 @@ class Handler(BaseHTTPRequestHandler):
             "x-custom": self.headers.get("X-Custom"),
             "length": len(raw),
             "body": raw[:400].decode("utf-8", "replace"),
+            "raw": raw[:8192],
         }
         self._send(200, json.dumps({"received": len(raw)}))
 
@@ -241,9 +242,15 @@ def main():
     result = rpc(process, "http/send", base_request(method="POST", url=f"{BASE}/echo", body={
         "mode": "formdata", "fields": [{"key": "note", "value": "hi"},
                                        {"key": "avatar", "kind": "file", "fileName": "a.png",
+                                        "contentType": "application/x-png-custom",
                                         "dataBase64": payload}]}))["result"]
+    raw_body = STATE["echo"]["raw"]
     check("multipart content-type", (STATE["echo"]["contentType"] or "").startswith("multipart/form-data"))
     check("multipart summary in preview", "multipart" in result["requestBodyPreview"])
+    check("multipart text field leaves the sidecar", b'name="note"' in raw_body and b"hi" in raw_body)
+    check("multipart file part carries the filename", b'filename="a.png"' in raw_body)
+    check("multipart file bytes leave the sidecar", b"\x89PNG\r\n\x1a\nfake" in raw_body)
+    check("multipart file uses the field content type", b"application/x-png-custom" in raw_body)
     oversized = base64.b64encode(b"x" * (1200 * 1024)).decode()
     result = rpc(process, "http/send", base_request(method="POST", url=f"{BASE}/echo", body={
         "mode": "formdata", "fields": [{"key": "big", "kind": "file", "fileName": "b.bin",

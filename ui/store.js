@@ -259,12 +259,17 @@
   }
 
   function countRequests(items) {
-    let count = 0;
+    return countTree(items).requests;
+  }
+
+  function countTree(items) {
+    const counts = { folders: 0, requests: 0 };
     eachNode(items, (item) => {
-      if (item.kind === "request") count += 1;
+      if (item.kind === "folder") counts.folders += 1;
+      else if (item.kind === "request") counts.requests += 1;
       return false;
     });
-    return count;
+    return counts;
   }
 
   function requestIdsUnder(item) {
@@ -721,6 +726,7 @@
         value: row.kind === "file" ? "" : resolveText(row.value),
         kind: row.kind === "file" ? "file" : "text",
         fileName: row.fileName || "",
+        contentType: row.kind === "file" ? (row.contentType || "") : "",
         dataBase64: row.dataBase64 || ""
       }));
     }
@@ -863,7 +869,7 @@
     createCollection, renameCollection, deleteCollection,
     createFolder, renameFolder, deleteFolder, toggleCollapsed,
     saveRequestTo, openSavedRequest, deleteSavedRequest,
-    moveItem, listFolders, countRequests, locate, folderContains,
+    moveItem, listFolders, countRequests, countTree, locate, folderContains,
     importCollection, migrateCollection,
     pushHistory, clearHistory, openHistoryEntry,
     createEnvironment, deleteEnvironment, activeEnvironment, setActiveEnvironment,

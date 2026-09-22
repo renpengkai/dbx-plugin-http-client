@@ -252,7 +252,7 @@
     const allowFiles = tab.body.mode === "formdata";
     panel.append(el("div", {
       class: "hc-hint",
-      text: allowFiles ? `form-data 支持文本与文件字段；${t("body.inlineLimit")}` : "x-www-form-urlencoded 会以 a=1&b=2 的形式发送。"
+      text: allowFiles ? t("body.formHint") : t("body.urlHint")
     }));
     const kvHost = el("div", {});
     panel.append(kvHost);

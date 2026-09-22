@@ -461,6 +461,10 @@ async function main() {
   const deleteFolder = Array.from(expanded.querySelector(".hc-side-group-head").querySelectorAll("button")).find((button) => button.title === "删除");
   deleteFolder.click();
   await waitFor(() => document.querySelector("#modal-host .hc-modal"), "delete folder confirm");
+  check("deleting a folder confirms the cascade counts",
+    document.querySelector("#modal-host .hc-modal").textContent.includes("1 个子集合") &&
+    document.querySelector("#modal-host .hc-modal").textContent.includes("1 个请求"),
+    document.querySelector("#modal-host .hc-modal").textContent.replace(/\s+/g, " ").slice(0, 160));
   const cancelDelete = $$("#modal-host .hc-modal-foot button").find((button) => button.textContent.includes("取消"));
   cancelDelete.click();
   await sleep(50);
@@ -498,6 +502,36 @@ async function main() {
   window.HC.viewSidebar.render();
   check("migrated requests show in the sidebar", $("#sidebar-body").textContent.includes("旧请求") && $("#sidebar-body").textContent.includes("子目录"));
 
+  const legacyHead = document.querySelector(`[data-node-id="${legacy.id}"] .hc-side-group-head`);
+  const newSub = legacyHead.querySelector("[data-action=new-subcollection]");
+  check("collection row exposes a sub-collection button", newSub && newSub.textContent.includes("子集合"));
+  newSub.click();
+  await waitFor(() => document.querySelector("#modal-host .hc-modal") && document.querySelector("#modal-host .hc-modal").textContent.includes("新建子集合"), "new subcollection dialog");
+  setInput(document.querySelector("#modal-host .hc-input"), "季度");
+  $$("#modal-host .hc-modal-foot button").find((button) => button.textContent === "确定").click();
+  await sleep(80);
+  const createdFolder = legacy.items.find((item) => item.kind === "folder" && item.name === "季度");
+  check("inline sub-collection button creates a nested folder", !!createdFolder && $("#sidebar-body").textContent.includes("季度"));
+
+  const createdHead = document.querySelector(`[data-node-id="${createdFolder.id}"] .hc-side-group-head`);
+  createdHead.dispatchEvent(new dom.window.MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 24, clientY: 24 }));
+  const contextMenu = document.querySelector("#hc-context-menu");
+  check("folder context menu offers new sub-collection and delete",
+    contextMenu && contextMenu.textContent.includes("新建子集合") && contextMenu.textContent.includes("删除"));
+  Array.from(contextMenu.querySelectorAll("button")).find((button) => button.textContent === "删除").click();
+  await waitFor(() => document.querySelector("#modal-host .hc-modal"), "context delete confirm");
+  $$("#modal-host .hc-modal-foot button").find((button) => button.textContent.includes("取消")).click();
+  await sleep(40);
+  check("cancelling the context-menu delete keeps the sub-collection", window.HC.store.locate(createdFolder.id));
+
+  const requestRow = document.querySelector('[data-node-id="legacy-req"]');
+  const deleteRequest = Array.from(requestRow.querySelectorAll("button")).find((button) => button.title === "删除");
+  deleteRequest.click();
+  await waitFor(() => document.querySelector("#modal-host .hc-modal") && document.querySelector("#modal-host .hc-modal").textContent.includes("旧请求"), "delete request confirm");
+  $$("#modal-host .hc-modal-foot button").find((button) => button.textContent === "删除").click();
+  await sleep(80);
+  check("confirmed delete removes the saved request", !window.HC.store.locate("legacy-req") && !$("#sidebar-body").textContent.includes("旧请求"));
+
   const curlCommand = window.HC.curl.generateCurl(window.HC.store.activeTab(), { resolve: (value) => window.HC.store.resolve(value) });
   check("cURL export contains method and data", curlCommand.includes("curl -X POST") && curlCommand.includes("--data-raw"), curlCommand.slice(0, 60));
 
@@ -534,7 +568,44 @@ async function main() {
     $("#response-pane .hc-file-card").textContent.includes("photo.jpg"),
     $("#response-pane .hc-file-card").textContent.slice(0, 80));
 
-  /* --------------------------------------------------- 12. i18n switch -- */
+  /* ----------------------------------------- 12. form-data file upload -- */
+  methodSelect.value = "POST";
+  fire(methodSelect, "change");
+  const uploadTab = window.HC.store.activeTab();
+  uploadTab.body.mode = "none";
+  uploadTab.body.raw = "";
+  window.HC.viewRequest.render();
+  setInput($("#url-input"), `${BASE}/echo`);
+  fire($("#url-input"), "change");
+  $$("#request-sections .hc-section").find((button) => button.textContent.trim().startsWith("请求体")).click();
+  await waitFor(() => $$("#request-panels .hc-radio").length > 0, "body radios for upload");
+  const formRadio = $$("#request-panels .hc-radio").find((label) => label.textContent.includes("form-data"));
+  formRadio.querySelector("input").checked = true;
+  fire(formRadio.querySelector("input"), "change");
+  await waitFor(() => $("#request-panels .hc-kv-type"), "form-data field type");
+  check("form-data rows can switch between text and file",
+    $("#request-panels .hc-kv-type") && $("#request-panels").textContent.includes("文本") && $("#request-panels").textContent.includes("文件"));
+  const typeSelect = $("#request-panels .hc-kv-type");
+  typeSelect.value = "file";
+  fire(typeSelect, "change");
+  await waitFor(() => $$("#request-panels button").some((button) => button.textContent.includes("选择文件")), "file picker");
+  check("file field shows a file picker", $$("#request-panels button").some((button) => button.textContent.includes("选择文件")));
+  uploadTab.body.fields = [
+    { key: "note", value: "hi", enabled: true, kind: "text" },
+    {
+      key: "avatar", value: "", enabled: true, kind: "file",
+      fileName: "note.txt", contentType: "text/plain",
+      dataBase64: Buffer.from("hello-file").toString("base64")
+    }
+  ];
+  $("#btn-send").click();
+  await waitFor(() => $("#response-pane .hc-code") && $("#response-pane .hc-code").textContent.includes("hello-file"), "multipart echo", 15000);
+  const echoed = $("#response-pane .hc-code").textContent;
+  check("sidecar sent the text field and the file bytes", echoed.includes("hello-file") && echoed.includes("hi"), echoed.slice(0, 180));
+  check("sidecar sent a real multipart part with the filename",
+    echoed.includes("note.txt") && echoed.includes("multipart/form-data"), echoed.slice(0, 220));
+
+  /* --------------------------------------------------- 13. i18n switch -- */
   window.HC.i18n.setLocale("en");
   window.HC.app_render?.();
   window.__hostEmit({ type: "env", locale: "en", theme: { appearance: "light", tokens: {} } });

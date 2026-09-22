@@ -18,7 +18,7 @@ import (
 
 const (
 	pluginID      = "com.jettech.httpclient"
-	pluginVersion = "0.1.2"
+	pluginVersion = "0.1.3"
 )
 
 type plugin struct {

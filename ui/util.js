@@ -217,12 +217,14 @@
     clear(host);
     host.classList.add("hc-kv");
     if (options.narrow) host.classList.add("is-narrow");
-    host.append(el("div", { class: "hc-kv-head" }, [
+    if (allowFiles) host.classList.add("is-files");
+    const headCells = [
       el("span", {}),
-      el("span", { text: options.keyLabel || t("kv.key") }),
-      el("span", { text: options.valueLabel || t("kv.value") }),
-      el("span", {})
-    ]));
+      el("span", { text: options.keyLabel || t("kv.key") })
+    ];
+    if (allowFiles) headCells.push(el("span", { text: t("body.fieldType") }));
+    headCells.push(el("span", { text: options.valueLabel || t("kv.value") }), el("span", {}));
+    host.append(el("div", { class: "hc-kv-head" }, headCells));
     const body = el("div", {});
     host.append(body);
     let syncGuard = false;
@@ -255,6 +257,26 @@
       keyInput.addEventListener("input", () => { row.key = keyInput.value; emit(); });
       wrap.append(keyInput);
 
+      if (allowFiles) {
+        const typeSelect = el("select", { class: "hc-select hc-select-flat hc-kv-type" });
+        typeSelect.append(el("option", { value: "text", text: t("body.fieldText") }));
+        typeSelect.append(el("option", { value: "file", text: t("body.fieldFile") }));
+        typeSelect.value = row.kind === "file" ? "file" : "text";
+        typeSelect.addEventListener("change", () => {
+          row.kind = typeSelect.value === "file" ? "file" : "text";
+          if (row.kind !== "file") {
+            row.fileName = "";
+            row.dataBase64 = "";
+            row.size = 0;
+            row.contentType = "";
+          }
+          const next = buildRow(row);
+          wrap.replaceWith(next);
+          emit();
+        });
+        wrap.append(typeSelect);
+      }
+
       if (allowFiles && row.kind === "file") {
         const fileInput = el("input", { type: "file", style: { display: "none" } });
         const label = el("div", { class: "hc-kv-file" });
@@ -270,7 +292,8 @@
           const file = fileInput.files && fileInput.files[0];
           if (!file) return;
           if (file.size > 1024 * 1024) { toast(t("toast.fileTooLarge"), "error"); fileInput.value = ""; return; }
-          row.fileName = file.name; row.size = file.size; row.dataBase64 = await readFileBase64(file);
+          row.fileName = file.name; row.size = file.size; row.contentType = file.type || "";
+          row.dataBase64 = await readFileBase64(file);
           name.textContent = `${file.name} (${formatBytes(file.size)})`;
           drop.hidden = false; emit();
         });

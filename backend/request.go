@@ -37,12 +37,13 @@ func (h headerPair) active() bool {
 }
 
 type bodyField struct {
-	Key        string `json:"key"`
-	Value      string `json:"value"`
-	Enabled    *bool  `json:"enabled,omitempty"`
-	Kind       string `json:"kind"` // "text" (default) or "file"
-	FileName   string `json:"fileName,omitempty"`
-	DataBase64 string `json:"dataBase64,omitempty"`
+	Key         string `json:"key"`
+	Value       string `json:"value"`
+	Enabled     *bool  `json:"enabled,omitempty"`
+	Kind        string `json:"kind"` // "text" (default) or "file"
+	FileName    string `json:"fileName,omitempty"`
+	ContentType string `json:"contentType,omitempty"`
+	DataBase64  string `json:"dataBase64,omitempty"`
 }
 
 func (f bodyField) active() bool {
@@ -259,7 +260,11 @@ func buildMultipartBody(fields []bodyField) (io.Reader, int64, string, *requestE
 			header := textproto.MIMEHeader{}
 			header.Set("Content-Disposition", fmt.Sprintf("form-data; name=\"%s\"; filename=\"%s\"",
 				escapeQuotes(field.Key), escapeQuotes(fileName)))
-			header.Set("Content-Type", http.DetectContentType(decoded))
+			mediaType := safeMediaType(field.ContentType)
+			if mediaType == "" {
+				mediaType = http.DetectContentType(decoded)
+			}
+			header.Set("Content-Type", mediaType)
 			part, err := writer.CreatePart(header)
 			if err != nil {
 				return nil, 0, "", newRequestError("invalid-body", "写入 multipart 字段失败："+err.Error())
@@ -277,6 +282,14 @@ func buildMultipartBody(fields []bodyField) (io.Reader, int64, string, *requestE
 		return nil, 0, "", newRequestError("invalid-body", "结束 multipart 请求体失败："+err.Error())
 	}
 	return bytes.NewReader(buffer.Bytes()), int64(buffer.Len()), writer.FormDataContentType(), nil
+}
+
+func safeMediaType(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || strings.ContainsAny(value, "\r\n;") {
+		return ""
+	}
+	return value
 }
 
 func humanBytes(size int64) string {

@@ -248,6 +248,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .hc-kv { display: flex; flex-direction: column; border: 1px solid var(--hc-border); border-radius: var(--hc-radius); overflow: hidden; }
 .hc-kv-head, .hc-kv-row { display: grid; grid-template-columns: 28px 1fr 1.4fr 28px; align-items: center; }
 .hc-kv.is-narrow .hc-kv-head, .hc-kv.is-narrow .hc-kv-row { grid-template-columns: 28px 1fr 1fr 28px; }
+.hc-kv.is-files .hc-kv-head, .hc-kv.is-files .hc-kv-row { grid-template-columns: 28px minmax(72px, 1fr) 72px minmax(120px, 1.5fr) 28px; }
+.hc-kv-type { width: 64px; min-width: 64px; height: 24px; margin: 0 4px; padding-right: 18px; font-size: 12px; }
 .hc-kv-head { background: var(--hc-muted); color: var(--hc-muted-fg); font-size: 11px; }
 .hc-kv-head > span { padding: 4px 8px; }
 .hc-kv-row { border-top: 1px solid var(--hc-border); }
@@ -347,11 +349,28 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .hc-tree-folder { margin: 2px 0 2px 10px; }
 .hc-chevron { width: 12px; flex: 0 0 auto; font-size: 10px; color: var(--hc-muted-fg); text-align: center; }
 .hc-side-group-head .hc-icon-btn { width: 22px; height: 22px; }
-/* Collection and folder actions stay visible. Request-row actions still appear
-   on hover; the head used to share `.hc-list-actions { opacity: 0 }` without a
-   matching hover rule, which hid rename / export / delete entirely. */
+/* Collection, folder, and request actions stay visible. The head used to
+   share `.hc-list-actions { opacity: 0 }` without a matching hover rule, which
+   hid rename / export / delete entirely. */
 .hc-side-group-head .hc-list-actions { opacity: 1; }
+.hc-list-item .hc-list-actions,
 .hc-list-item:focus-within .hc-list-actions { opacity: 1; }
+.hc-mini-btn {
+  height: 22px; padding: 0 6px; border: 1px solid var(--hc-border); border-radius: var(--hc-radius-sm);
+  background: var(--hc-bg); color: var(--hc-fg); font-size: 11px; cursor: pointer; white-space: nowrap;
+}
+.hc-mini-btn:hover { background: var(--hc-hover); border-color: color-mix(in srgb, var(--hc-primary) 35%, var(--hc-border)); }
+.hc-context-menu {
+  position: fixed; z-index: 50; min-width: 148px; padding: 4px;
+  background: var(--hc-card); color: var(--hc-card-fg); border: 1px solid var(--hc-border);
+  border-radius: var(--hc-radius); box-shadow: 0 12px 32px rgba(0, 0, 0, .2);
+}
+.hc-context-item {
+  display: block; width: 100%; text-align: left; border: 0; background: transparent;
+  padding: 6px 8px; border-radius: var(--hc-radius-sm); cursor: pointer; color: inherit;
+}
+.hc-context-item:hover { background: var(--hc-hover); }
+.hc-context-item.is-danger { color: var(--hc-destructive); }
 .hc-file-card {
   display: flex; flex-direction: column; gap: 6px; padding: 12px;
   border: 1px solid var(--hc-border); border-radius: var(--hc-radius); background: var(--hc-muted);

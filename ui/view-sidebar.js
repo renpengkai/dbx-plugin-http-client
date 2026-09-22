@@ -83,7 +83,8 @@
       el("span", { class: "hc-badge", text: String(count) })
     ]);
     const actions = el("div", { class: "hc-list-actions" });
-    actions.append(iconButton("+", t("action.newFolder"), () => promptFolder(collection.id, "")));
+    actions.append(textButton(t("action.subcollection"), t("action.newSubcollection"), () => promptFolder(collection.id, "")));
+    head.addEventListener("contextmenu", (event) => openContextMenu(event, collectionMenu(collection)));
     actions.append(iconButton("✎", t("action.rename"), async () => {
       const name = await util.promptDialog({ title: t("dialog.renameTitle"), value: collection.name });
       if (name) store.renameCollection(collection.id, name);
@@ -124,7 +125,8 @@
       el("span", { class: "hc-badge", text: String(store.countRequests(folder.items)) })
     ]);
     const actions = el("div", { class: "hc-list-actions" });
-    actions.append(iconButton("+", t("action.newFolder"), () => promptFolder(collection.id, folder.id)));
+    actions.append(textButton(t("action.subcollection"), t("action.newSubcollection"), () => promptFolder(collection.id, folder.id)));
+    head.addEventListener("contextmenu", (event) => openContextMenu(event, folderMenu(collection, folder)));
     actions.append(iconButton("✎", t("action.rename"), async () => {
       const name = await util.promptDialog({ title: t("dialog.renameTitle"), value: folder.name });
       if (name) store.renameFolder(folder.id, name);
@@ -173,6 +175,7 @@
       }
     }));
     item.append(rowActions);
+    item.addEventListener("contextmenu", (event) => openContextMenu(event, requestMenu(collection, saved)));
     item.addEventListener("click", (event) => {
       if (event.target.closest(".hc-list-actions")) return;
       store.openSavedRequest(collection.id, saved.id);
@@ -183,14 +186,93 @@
   }
 
   async function promptFolder(collectionId, parentId) {
-    const name = await util.promptDialog({ title: t("dialog.newFolderTitle"), label: t("dialog.name") });
+    const name = await util.promptDialog({ title: t("dialog.newSubcollectionTitle"), label: t("dialog.name") });
     if (name) store.createFolder(collectionId, parentId, name);
   }
 
+  function collectionMenu(collection) {
+    return [
+      { label: t("action.newSubcollection"), onClick: () => promptFolder(collection.id, "") },
+      { label: t("action.rename"), onClick: async () => {
+        const name = await util.promptDialog({ title: t("dialog.renameTitle"), value: collection.name });
+        if (name) store.renameCollection(collection.id, name);
+      } },
+      { label: t("action.export"), onClick: () => openExportDialog(collection) },
+      { label: t("action.delete"), danger: true, onClick: () => confirmDeleteCollection(collection) }
+    ];
+  }
+
+  function folderMenu(collection, folder) {
+    return [
+      { label: t("action.newSubcollection"), onClick: () => promptFolder(collection.id, folder.id) },
+      { label: t("action.rename"), onClick: async () => {
+        const name = await util.promptDialog({ title: t("dialog.renameTitle"), value: folder.name });
+        if (name) store.renameFolder(folder.id, name);
+      } },
+      { label: t("action.move"), onClick: () => openMoveDialog(folder, collection.id) },
+      { label: t("action.delete"), danger: true, onClick: () => confirmDeleteFolder(folder) }
+    ];
+  }
+
+  function requestMenu(collection, saved) {
+    return [
+      { label: t("action.move"), onClick: () => openMoveDialog(saved, collection.id) },
+      { label: t("action.duplicate"), onClick: () => {
+        store.openSavedRequest(collection.id, saved.id);
+        const tab = store.activeTab();
+        tab.savedRequestId = "";
+        tab.collectionId = "";
+        tab.folderId = "";
+        HC.viewRequest.render();
+        HC.viewResponse.render();
+      } },
+      { label: t("action.delete"), danger: true, onClick: async () => {
+        if (await util.confirmDialog({ title: t("dialog.deleteTitle"), message: t("dialog.deleteMessage", { name: saved.name }) })) {
+          store.deleteSavedRequest(collection.id, saved.id);
+          util.toast(t("toast.deleted"));
+        }
+      } }
+    ];
+  }
+
+  let contextMenuNode = null;
+
+  function closeContextMenu() {
+    if (contextMenuNode) {
+      contextMenuNode.remove();
+      contextMenuNode = null;
+    }
+  }
+
+  function openContextMenu(event, items) {
+    event.preventDefault();
+    event.stopPropagation();
+    closeContextMenu();
+    const menu = el("div", { class: "hc-context-menu", id: "hc-context-menu" });
+    items.forEach((item) => {
+      menu.append(el("button", {
+        type: "button",
+        class: `hc-context-item${item.danger ? " is-danger" : ""}`,
+        text: item.label,
+        on: { click: (clickEvent) => { clickEvent.stopPropagation(); closeContextMenu(); item.onClick(); } }
+      }));
+    });
+    document.body.append(menu);
+    const width = 168;
+    const left = Math.max(8, Math.min(event.clientX, window.innerWidth - width - 8));
+    const top = Math.max(8, Math.min(event.clientY, window.innerHeight - (items.length * 32 + 12)));
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+    contextMenuNode = menu;
+  }
+
+  document.addEventListener("click", () => closeContextMenu());
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeContextMenu(); });
+
   async function confirmDeleteCollection(collection) {
-    const count = store.countRequests(collection.items);
-    const message = count
-      ? t("dialog.deleteTreeMessage", { name: collection.name, count })
+    const counts = store.countTree(collection.items);
+    const message = (counts.folders || counts.requests)
+      ? t("dialog.deleteTreeMessage", { name: collection.name, folders: counts.folders, requests: counts.requests })
       : t("dialog.deleteMessage", { name: collection.name });
     if (await util.confirmDialog({ title: t("dialog.deleteTitle"), message })) {
       store.deleteCollection(collection.id);
@@ -198,10 +280,18 @@
     }
   }
 
+  function textButton(text, title, handler) {
+    return el("button", {
+      class: "hc-mini-btn", type: "button", text, title,
+      "data-action": "new-subcollection",
+      on: { click: (event) => { event.stopPropagation(); handler(); } }
+    });
+  }
+
   async function confirmDeleteFolder(folder) {
-    const count = store.countRequests(folder.items);
-    const message = count
-      ? t("dialog.deleteFolderMessage", { name: folder.name, count })
+    const counts = store.countTree(folder.items);
+    const message = (counts.folders || counts.requests)
+      ? t("dialog.deleteFolderMessage", { name: folder.name, folders: counts.folders, requests: counts.requests })
       : t("dialog.deleteMessage", { name: folder.name });
     if (await util.confirmDialog({
       title: t("dialog.deleteTitle"),

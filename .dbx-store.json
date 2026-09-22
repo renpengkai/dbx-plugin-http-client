@@ -7,7 +7,7 @@
   "source": "https://github.com/renpengkai/dbx-plugin-http-client",
   "homepage": "https://github.com/renpengkai/dbx-plugin-http-client",
   "license": "Apache-2.0",
-  "releaseNotes": "0.1.2：我的集合支持多级文件夹（新建、移动、展开/折叠），旧的扁平 requests 会自动迁到 items，已有请求不会丢。集合、文件夹和请求都可以确认后删除；侧栏不再重复放一个只开空白标签的「新建请求」，集合导入只收 JSON（cURL 仍走顶部按钮），并去掉未接线的文案。保存响应文件时按 Content-Disposition 的 filename / filename*、Content-Type 和 URL 末段决定文件名与扩展名，pdf/zip/png/jpg/json/csv/xlsx 等不再落成笼统的 .bin。",
+  "releaseNotes": "0.1.3：集合和子集合行内有「子集合」按钮，右键菜单也可新建子集合。删除集合、子集合或请求前会确认；删除集合/子集合会级联删除其中的子集合和请求，确认文案写明数量。form-data 字段可在「文本 / 文件」间切换，选中的本地文件由 Sidecar 以真实 multipart（含文件名）和文本字段一起发出。另含 0.1.2：多级文件夹与旧数据迁移，以及按 Content-Disposition / Content-Type / URL 推断下载文件名。",
   "localizations": {
     "zh-CN": {
       "name": "HTTP 客户端",
