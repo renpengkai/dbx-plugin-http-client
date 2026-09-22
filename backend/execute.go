@@ -66,14 +66,23 @@ type sendResult struct {
 	BodyTruncated      bool              `json:"bodyTruncated"`
 	BodyReadError      string            `json:"bodyReadError,omitempty"`
 	SavedPath          string            `json:"savedPath,omitempty"`
+	SuggestedFileName  string            `json:"suggestedFileName,omitempty"`
 	Notice             string            `json:"notice,omitempty"`
 	Metadata           map[string]string `json:"metadata,omitempty"`
 }
 
+type bodyMeta struct {
+	contentType        string
+	contentDisposition string
+	finalURL           string
+}
+
 type storedBody struct {
-	payload     []byte
-	contentType string
-	createdAt   time.Time
+	payload            []byte
+	contentType        string
+	contentDisposition string
+	finalURL           string
+	createdAt          time.Time
 }
 
 type bodyStore struct {
@@ -88,12 +97,18 @@ func newBodyStore() *bodyStore {
 	return &bodyStore{entries: map[string]*storedBody{}}
 }
 
-func (s *bodyStore) put(payload []byte, contentType string) string {
+func (s *bodyStore) put(payload []byte, meta bodyMeta) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.pruneLocked()
 	id := fmt.Sprintf("body-%d-%d", time.Now().UnixMilli(), atomic.AddUint64(&s.counter, 1))
-	s.entries[id] = &storedBody{payload: payload, contentType: contentType, createdAt: time.Now()}
+	s.entries[id] = &storedBody{
+		payload:            payload,
+		contentType:        meta.contentType,
+		contentDisposition: meta.contentDisposition,
+		finalURL:           meta.finalURL,
+		createdAt:          time.Now(),
+	}
 	s.order = append(s.order, id)
 	s.bytes += int64(len(payload))
 	for len(s.order) > maxStoredBodies || s.bytes > maxStoredBodyBytes {
@@ -323,7 +338,13 @@ func (e *executor) execute(spec *sendRequest, emitter *dbxpluginsdk.Emitter) *se
 
 	result.SizeBytes = int64(len(payload))
 	result.DurationMs = msSince(started)
-	result.BodyID = e.bodies.put(payload, result.ContentType)
+	disposition := response.Header.Get("Content-Disposition")
+	result.SuggestedFileName = suggestDownloadName(disposition, result.ContentType, result.FinalURL)
+	result.BodyID = e.bodies.put(payload, bodyMeta{
+		contentType:        result.ContentType,
+		contentDisposition: disposition,
+		finalURL:           result.FinalURL,
+	})
 	preview := payload
 	if len(preview) > maxPreviewBytes {
 		preview = preview[:maxPreviewBytes]
@@ -552,7 +573,9 @@ func (p *plugin) handleSaveBody(params json.RawMessage) (any, *dbxpluginsdk.Plug
 	}
 	name := sanitizeFileName(payload.FileName)
 	if name == "" {
-		name = "response-" + time.Now().Format("20060102-150405") + guessExtension(entry.contentType)
+		name = suggestDownloadName(entry.contentDisposition, entry.contentType, entry.finalURL)
+	} else {
+		name = withExtension(name, entry.contentType, false)
 	}
 	directory := strings.TrimSpace(payload.Directory)
 	if directory == "" {
@@ -568,50 +591,9 @@ func (p *plugin) handleSaveBody(params json.RawMessage) (any, *dbxpluginsdk.Plug
 	if err := os.MkdirAll(directory, 0o755); err != nil {
 		return nil, dbxpluginsdk.NewError(-32000, "创建目录失败："+err.Error())
 	}
-	target := filepath.Join(directory, name)
+	target := uniquePath(directory, name)
 	if err := os.WriteFile(target, entry.payload, 0o644); err != nil {
 		return nil, dbxpluginsdk.NewError(-32000, "写入文件失败："+err.Error())
 	}
 	return map[string]any{"path": target, "bytes": len(entry.payload)}, nil
-}
-
-func sanitizeFileName(value string) string {
-	value = strings.TrimSpace(value)
-	value = strings.ReplaceAll(value, "\\", "/")
-	if index := strings.LastIndex(value, "/"); index >= 0 {
-		value = value[index+1:]
-	}
-	if value == "" || value == "." || value == ".." {
-		return ""
-	}
-	replacer := strings.NewReplacer("\x00", "", "\n", "", "\r", "")
-	return replacer.Replace(value)
-}
-
-func guessExtension(contentType string) string {
-	base := strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0]))
-	switch base {
-	case "application/json":
-		return ".json"
-	case "text/html":
-		return ".html"
-	case "text/plain":
-		return ".txt"
-	case "text/css":
-		return ".css"
-	case "application/javascript", "text/javascript":
-		return ".js"
-	case "application/xml", "text/xml":
-		return ".xml"
-	case "image/png":
-		return ".png"
-	case "image/jpeg":
-		return ".jpg"
-	case "image/svg+xml":
-		return ".svg"
-	case "application/pdf":
-		return ".pdf"
-	default:
-		return ".bin"
-	}
 }

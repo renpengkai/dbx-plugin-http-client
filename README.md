@@ -56,11 +56,13 @@ dbx-http-client/
 │   ├── main.go                    # 方法路由
 │   ├── request.go                 # 请求模型、URL/请求体/认证构造、代理解析
 │   ├── execute.go                 # 执行、跳转链、错误分类、响应体仓库、分块读取
+│   ├── filename.go                # 下载文件名：Content-Disposition / Content-Type / URL
 │   ├── store.go                   # 配置持久化（0600，原子写）
 │   └── go.mod
 ├── tools/                         # 测试脚手架（不属于发布产物）
-│   ├── sidecar-smoke-test.py      # 协议级冒烟测试：直连 Sidecar 跑 41 项断言
-│   ├── ui-e2e-test.mjs            # jsdom 端到端：真实 UI + 真实 Sidecar，36 项断言
+│   ├── sidecar-smoke-test.py      # 协议级冒烟测试：直连 Sidecar 跑 48 项断言
+│   ├── ui-e2e-test.mjs            # jsdom 端到端：真实 UI + 真实 Sidecar，53 项断言
+│   ├── download-name-test.mjs     # 下载文件名规则（与 backend/filename.go 对齐）
 │   ├── test-target-server.py      # 上述两个测试共用的目标 HTTP 服务器
 │   └── run-ui-e2e.sh              # 一键跑端到端测试（自动起停目标服务器）
 ├── LICENSE                        # Apache License 2.0 全文
@@ -88,12 +90,12 @@ dbx-http-client/
 - 状态徽标（按 2xx/3xx/4xx/5xx 着色）、HTTP 版本、总耗时、TTFB、体积、跳转链路
 - 视图：响应体（格式化 / 原始 / 预览）、响应头表、Cookie、请求回显（实际发出的头与体）
 - JSON 语法高亮；图片响应可直接预览；文本响应可复制
-- 超过 256 KiB 的预览会明确标注，可**分块加载完整响应**或让 Sidecar **直接保存到文件**
+- 超过 256 KiB 的预览会明确标注，可**分块加载完整响应**或让 Sidecar **直接保存到文件**。文件名优先用 `Content-Disposition` 的 `filename*` / `filename`，否则用 URL 末段配合 `Content-Type`，最后才是 `download` 加正确后缀
 - 失败时渲染错误卡片：类型（超时 / 取消 / DNS / TLS / 连接 / URL 无效 / 网络）+ 原始报文
 
 **组织与复用**
 
-- 集合：保存 / 另存 / 重命名 / 删除 / 复制，JSON 导入导出
+- 集合：多级文件夹（新建、移动、展开/折叠），保存 / 重命名 / 删除 / 复制，JSON 导入导出。0.1.2 之前的扁平 `requests` 会在读取时迁到 `items`
 - 历史：最近 60 条，一键还原整条请求，可清空
 - 环境：多环境变量表，`{{name}}` 在 URL、请求头、参数、请求体、认证字段中统一替换
 - 内置动态变量：`{{$uuid}}`、`{{$timestamp}}`、`{{$isoTimestamp}}`、`{{$randomInt}}`、`{{$randomFloat}}`、`{{$randomBoolean}}`、`{{$randomString}}`
@@ -110,7 +112,7 @@ Sidecar 通过 stdout 的 JSON Lines 收发 protocol v1 报文；stdout 只留�
 | `http/send` | `{ requestId, method, url, headers[], body{mode,raw,contentType,fields[]}, auth{...}, options{...} }` | 见下方 `sendResult` |
 | `http/cancel` | `{ requestId }` | `{ cancelled }` |
 | `http/body` | `{ bodyId, offset, length≤512 KiB }` | `{ bodyId, offset, length, totalBytes, eof, dataBase64, contentType }` |
-| `http/body/save` | `{ bodyId, directory?, fileName? }` | `{ path, bytes }`（目录默认 `~/Downloads`） |
+| `http/body/save` | `{ bodyId, directory?, fileName? }` | `{ path, bytes }`（目录默认 `~/Downloads`；未给 fileName 时按响应头和 URL 推断） |
 | `store/load` | — | `{ path, store, exists }` |
 | `store/save` | `{ store }` | `{ path, bytes, savedAt }` |
 
@@ -122,7 +124,7 @@ Sidecar 通过 stdout 的 JSON Lines 收发 protocol v1 报文；stdout 只留�
 `sendResult` 关键字段：`ok`、`status`、`statusText`、`httpVersion`、`finalUrl`、`durationMs`、
 `firstByteMs`、`sizeBytes`、`contentType`、`headers[]`、`setCookies[]`、`redirects[]`、
 `requestHeaders[]`、`requestBodyPreview`、`bodyId`、`bodyPreviewBase64`、`bodyPreviewBytes`、
-`bodyTruncated`；失败时 `ok:false` 且带 `error: { kind, message }`
+`bodyTruncated`、`suggestedFileName`；失败时 `ok:false` 且带 `error: { kind, message }`
 （`kind` ∈ `timeout|canceled|dns|tls|connection|invalid-url|invalid-body|invalid-proxy|network`）。
 
 `invalid-url` 只表示**请求发出前就判定 URL 不可用**（无法解析、缺协议前缀、协议非 http/https、
@@ -158,7 +160,7 @@ dbx-plugin dev --path . --port 5190
 开发宿主不会替你安装依赖或翻译文案；`.dbx-dev/` 里是明文调试数据，已在 `.gitignore` 中。
 改动 `ui/` 后刷新页面即可；改动 `backend/` 后重启 `dbx-plugin dev`。
 
-协议级回归（推荐在打包前跑一遍，41 项断言覆盖正常、边界与失败路径）：
+协议级回归（推荐在打包前跑一遍，48 项断言覆盖正常、边界与失败路径）：
 
 ```bash
 go build -o dist/backend ./backend
@@ -178,8 +180,8 @@ CLI 会为当前平台构建原生后端、暂存 `manifest.json` / `assets/` / 
 `t8y2/dbx` 的可复用工作流，按目标平台构建未签名候选包，并合并出 `release-candidates.json`：
 
 ```bash
-git tag v0.1.1 && git push origin v0.1.1
-gh release create v0.1.1 --title v0.1.1 --notes "扁平化方法 / 环境 / Content-Type 选择框"
+git tag v0.1.2 && git push origin v0.1.2
+gh release create v0.1.2 --title v0.1.2 --notes "集合多级文件夹，以及按响应头推断下载文件名"
 ```
 
 该工作流有两处**必须注意**的配置：

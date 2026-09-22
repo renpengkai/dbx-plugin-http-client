@@ -64,6 +64,19 @@ class Handler(BaseHTTPRequestHandler):
             import gzip
             self._send(200, gzip.compress(json.dumps({"compressed": True}).encode()), "application/json",
                        {"Content-Encoding": "gzip"})
+        elif path.startswith("/dl/sheet"):
+            self._send(200, b"PK\x03\x04fake-xlsx",
+                       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                       {"Content-Disposition": "attachment; filename=\"fallback.xlsx\"; filename*=UTF-8''%E5%AD%A3%E5%BA%A6%E6%8A%A5%E8%A1%A8.xlsx"})
+        elif path.startswith("/dl/photo"):
+            self._send(200, b"\xff\xd8\xff\xd9", "image/jpeg")
+        elif path.startswith("/dl/archive.zip"):
+            self._send(200, b"PK", "application/octet-stream")
+        elif path.startswith("/dl/blob"):
+            self._send(200, b"PK", "application/zip")
+        elif path.startswith("/dl/report.pdf"):
+            self._send(200, b"%PDF-1.4", "application/pdf",
+                       {"Content-Disposition": 'attachment; filename="report.pdf"'})
         else:
             self._send(200, json.dumps({"path": path}))
 
@@ -184,7 +197,24 @@ def main():
     saved = rpc(process, "http/body/save", {"bodyId": result["bodyId"],
                                            "directory": os.path.join(SANDBOX_HOME, "downloads"),
                                            "fileName": "large.txt"})["result"]
-    check("body saved to disk", saved["bytes"] == 1536 * 1024, saved["path"])
+    check("body saved to disk", saved["bytes"] == 1536 * 1024 and saved["path"].endswith("large.txt"), saved["path"])
+
+    downloads = os.path.join(SANDBOX_HOME, "downloads")
+    sheet = rpc(process, "http/send", base_request(url=f"{BASE}/dl/sheet"))["result"]
+    check("filename* wins over filename", sheet.get("suggestedFileName") == "季度报表.xlsx", sheet.get("suggestedFileName"))
+    saved = rpc(process, "http/body/save", {"bodyId": sheet["bodyId"], "directory": downloads})["result"]
+    check("save without fileName uses filename*", saved["path"].endswith("季度报表.xlsx"), saved["path"])
+    saved_again = rpc(process, "http/body/save", {"bodyId": sheet["bodyId"], "directory": downloads})["result"]
+    check("second save does not overwrite", saved_again["path"].endswith("季度报表 (1).xlsx"), saved_again["path"])
+
+    photo = rpc(process, "http/send", base_request(url=f"{BASE}/dl/photo"))["result"]
+    check("jpeg name comes from the url", photo.get("suggestedFileName") == "photo.jpg", photo.get("suggestedFileName"))
+    archive = rpc(process, "http/send", base_request(url=f"{BASE}/dl/archive.zip"))["result"]
+    check("octet-stream keeps the url extension", archive.get("suggestedFileName") == "archive.zip", archive.get("suggestedFileName"))
+    blob = rpc(process, "http/send", base_request(url=f"{BASE}/dl/blob"))["result"]
+    check("zip mime adds extension to the url segment", blob.get("suggestedFileName") == "blob.zip", blob.get("suggestedFileName"))
+    report = rpc(process, "http/send", base_request(url=f"{BASE}/dl/report.pdf"))["result"]
+    check("content-disposition filename is used", report.get("suggestedFileName") == "report.pdf", report.get("suggestedFileName"))
 
     result = rpc(process, "http/send", base_request(
         method="POST", url=f"{BASE}/echo",

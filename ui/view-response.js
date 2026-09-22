@@ -102,8 +102,10 @@
     if (result.finalUrl) {
       host.append(el("span", { class: "hc-hint", text: result.finalUrl, title: result.finalUrl }));
     }
+    const fileName = suggestedName(result);
     host.append(el("button", {
       class: "hc-btn hc-btn-sm hc-btn-ghost", type: "button", text: t("response.saveToFile"),
+      title: fileName,
       on: { click: () => saveToFile(tab, result) }
     }));
     host.append(el("button", {
@@ -200,7 +202,7 @@
       if (/text\/html/i.test(result.contentType || "")) {
         host.append(el("div", { class: "hc-hint", text: t("response.htmlNote") }));
       } else if (!util.isTextual(result.contentType)) {
-        host.append(el("div", { class: "hc-hint", text: `二进制响应（${result.contentType || "unknown"}），请使用「保存到文件」。` }));
+        host.append(renderFileCard(result, total));
         return;
       }
       host.append(el("pre", { class: "hc-code", text: currentText(tab, result).slice(0, 200000) }));
@@ -209,7 +211,7 @@
 
     const content = currentText(tab, result);
     if (!util.isTextual(result.contentType)) {
-      host.append(el("div", { class: "hc-hint", text: `二进制响应（${result.contentType || "unknown"}，${util.formatBytes(total)}），请使用「保存到文件」查看。` }));
+      host.append(renderFileCard(result, total));
       return;
     }
     if (state.bodyMode === "pretty") {
@@ -255,13 +257,37 @@
     util.toast(ok ? t("toast.copied") : t("toast.copyFailed"), ok ? "success" : "error");
   }
 
+  function suggestedName(result) {
+    if (result && result.suggestedFileName) return result.suggestedFileName;
+    if (window.HC.downloadName) {
+      return HC.downloadName.suggest({
+        headers: result && result.headers,
+        contentType: result && result.contentType,
+        url: (result && (result.finalUrl || result.url)) || ""
+      });
+    }
+    return "download.bin";
+  }
+
+  function renderFileCard(result, total) {
+    const name = suggestedName(result);
+    return el("div", { class: "hc-file-card" }, [
+      el("div", { class: "hc-file-name", text: name }),
+      el("div", { class: "hc-hint", text: t("response.fileHint", {
+        name,
+        type: result.contentType || "application/octet-stream",
+        size: util.formatBytes(total)
+      }) })
+    ]);
+  }
+
   async function saveToFile(tab, result) {
     if (!HC.bridge.backendReady) {
       util.toast(t("err.backendHint"), "error");
       return;
     }
     try {
-      const saved = await HC.bridge.saveBody(result.bodyId, {});
+      const saved = await HC.bridge.saveBody(result.bodyId, { fileName: suggestedName(result) });
       util.toast(t("toast.savedTo", { path: saved.path }), "success");
     } catch (error) {
       util.toast(t("toast.saveFailed", { message: error.message || error }), "error");

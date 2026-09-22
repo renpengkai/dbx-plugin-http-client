@@ -8,7 +8,7 @@
   const t = (key, params) => HC.i18n.t(key, params);
   const el = util.el;
 
-  const VERSION = "0.1.1";
+  const VERSION = "0.1.2";
 
   function staticLabels() {
     document.documentElement.lang = HC.i18n.locale;
@@ -139,14 +139,30 @@
     const tab = store.activeTab();
     if (!tab) return;
     const nameInput = el("input", { class: "hc-input", type: "text", value: store.requestTitle(tab) });
-    const collectionSelect = el("select", { class: "hc-select" });
-    store.state.collections.forEach((collection) => collectionSelect.append(el("option", { value: collection.id, text: collection.name })));
-    collectionSelect.value = tab.collectionId || (store.state.collections[0] || {}).id || "";
+    const collectionSelect = el("select", { class: "hc-select hc-select-flat" });
+    const folderSelect = el("select", { class: "hc-select hc-select-flat" });
+    const fillCollections = () => {
+      util.clear(collectionSelect);
+      store.state.collections.forEach((collection) => collectionSelect.append(el("option", { value: collection.id, text: collection.name })));
+      collectionSelect.value = tab.collectionId || (store.state.collections[0] || {}).id || "";
+    };
+    const fillFolders = () => {
+      util.clear(folderSelect);
+      folderSelect.append(el("option", { value: "", text: t("dialog.collectionRoot") }));
+      store.listFolders(collectionSelect.value).forEach((folder) => {
+        folderSelect.append(el("option", { value: folder.id, text: folder.path }));
+      });
+      if (tab.folderId) folderSelect.value = tab.folderId;
+    };
+    fillCollections();
+    fillFolders();
+    collectionSelect.addEventListener("change", fillFolders);
     util.openModal({
       title: t("dialog.saveTitle"),
       render: (body) => {
         body.append(el("label", { class: "hc-field" }, [el("span", { class: "hc-field-label", text: t("dialog.name") }), nameInput]));
         body.append(el("label", { class: "hc-field" }, [el("span", { class: "hc-field-label", text: t("dialog.collection") }), collectionSelect]));
+        body.append(el("label", { class: "hc-field" }, [el("span", { class: "hc-field-label", text: t("dialog.folder") }), folderSelect]));
         body.append(el("div", { class: "hc-hint", text: `${tab.method} ${tab.url}` }));
       },
       actions: [
@@ -157,7 +173,7 @@
             const name = nameInput.value.trim() || store.requestTitle(tab);
             let collectionId = collectionSelect.value;
             if (!collectionId) collectionId = store.createCollection(t("misc.untitledCollection")).id;
-            store.saveRequestTo(collectionId, tab, name);
+            store.saveRequestTo(collectionId, tab, name, folderSelect.value);
             util.toast(t("toast.saved"), "success");
             api.close();
             renderTabs();

@@ -344,6 +344,19 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .hc-side-group-head { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: var(--hc-radius-sm); cursor: pointer; color: var(--hc-muted-fg); }
 .hc-side-group-head:hover { background: var(--hc-hover); color: var(--hc-fg); }
 .hc-side-group-body { padding-left: 8px; }
+.hc-tree-folder { margin: 2px 0 2px 10px; }
+.hc-chevron { width: 12px; flex: 0 0 auto; font-size: 10px; color: var(--hc-muted-fg); text-align: center; }
+.hc-side-group-head .hc-icon-btn { width: 22px; height: 22px; }
+/* Collection and folder actions stay visible. Request-row actions still appear
+   on hover; the head used to share `.hc-list-actions { opacity: 0 }` without a
+   matching hover rule, which hid rename / export / delete entirely. */
+.hc-side-group-head .hc-list-actions { opacity: 1; }
+.hc-list-item:focus-within .hc-list-actions { opacity: 1; }
+.hc-file-card {
+  display: flex; flex-direction: column; gap: 6px; padding: 12px;
+  border: 1px solid var(--hc-border); border-radius: var(--hc-radius); background: var(--hc-muted);
+}
+.hc-file-card .hc-file-name { font-family: var(--hc-mono); font-weight: 600; word-break: break-all; }
 .hc-empty { padding: 14px 8px; color: var(--hc-muted-fg); text-align: center; font-size: 12px; }
 
 .hc-tag {
@@ -362,6 +375,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
   position: fixed; inset: 0; z-index: 40; display: grid; place-items: center;
   background: color-mix(in srgb, #000 45%, transparent); padding: 24px;
 }
+.hc-modal .hc-field { align-items: stretch; margin-bottom: 8px; }
+.hc-modal .hc-field .hc-select,
+.hc-modal .hc-field .hc-input { flex: 1; min-width: 0; width: 100%; }
+
 .hc-modal {
   width: min(620px, 100%); max-height: 84vh; display: flex; flex-direction: column;
   background: var(--hc-card); color: var(--hc-card-fg); border: 1px solid var(--hc-border);
