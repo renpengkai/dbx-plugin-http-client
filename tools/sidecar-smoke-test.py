@@ -64,6 +64,19 @@ class Handler(BaseHTTPRequestHandler):
             import gzip
             self._send(200, gzip.compress(json.dumps({"compressed": True}).encode()), "application/json",
                        {"Content-Encoding": "gzip"})
+        elif path.startswith("/dl/sheet"):
+            self._send(200, b"PK\x03\x04fake-xlsx",
+                       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                       {"Content-Disposition": "attachment; filename=\"fallback.xlsx\"; filename*=UTF-8''%E5%AD%A3%E5%BA%A6%E6%8A%A5%E8%A1%A8.xlsx"})
+        elif path.startswith("/dl/photo"):
+            self._send(200, b"\xff\xd8\xff\xd9", "image/jpeg")
+        elif path.startswith("/dl/archive.zip"):
+            self._send(200, b"PK", "application/octet-stream")
+        elif path.startswith("/dl/blob"):
+            self._send(200, b"PK", "application/zip")
+        elif path.startswith("/dl/report.pdf"):
+            self._send(200, b"%PDF-1.4", "application/pdf",
+                       {"Content-Disposition": 'attachment; filename="report.pdf"'})
         else:
             self._send(200, json.dumps({"path": path}))
 
@@ -76,6 +89,7 @@ class Handler(BaseHTTPRequestHandler):
             "x-custom": self.headers.get("X-Custom"),
             "length": len(raw),
             "body": raw[:400].decode("utf-8", "replace"),
+            "raw": raw[:8192],
         }
         self._send(200, json.dumps({"received": len(raw)}))
 
@@ -184,7 +198,24 @@ def main():
     saved = rpc(process, "http/body/save", {"bodyId": result["bodyId"],
                                            "directory": os.path.join(SANDBOX_HOME, "downloads"),
                                            "fileName": "large.txt"})["result"]
-    check("body saved to disk", saved["bytes"] == 1536 * 1024, saved["path"])
+    check("body saved to disk", saved["bytes"] == 1536 * 1024 and saved["path"].endswith("large.txt"), saved["path"])
+
+    downloads = os.path.join(SANDBOX_HOME, "downloads")
+    sheet = rpc(process, "http/send", base_request(url=f"{BASE}/dl/sheet"))["result"]
+    check("filename* wins over filename", sheet.get("suggestedFileName") == "季度报表.xlsx", sheet.get("suggestedFileName"))
+    saved = rpc(process, "http/body/save", {"bodyId": sheet["bodyId"], "directory": downloads})["result"]
+    check("save without fileName uses filename*", saved["path"].endswith("季度报表.xlsx"), saved["path"])
+    saved_again = rpc(process, "http/body/save", {"bodyId": sheet["bodyId"], "directory": downloads})["result"]
+    check("second save does not overwrite", saved_again["path"].endswith("季度报表 (1).xlsx"), saved_again["path"])
+
+    photo = rpc(process, "http/send", base_request(url=f"{BASE}/dl/photo"))["result"]
+    check("jpeg name comes from the url", photo.get("suggestedFileName") == "photo.jpg", photo.get("suggestedFileName"))
+    archive = rpc(process, "http/send", base_request(url=f"{BASE}/dl/archive.zip"))["result"]
+    check("octet-stream keeps the url extension", archive.get("suggestedFileName") == "archive.zip", archive.get("suggestedFileName"))
+    blob = rpc(process, "http/send", base_request(url=f"{BASE}/dl/blob"))["result"]
+    check("zip mime adds extension to the url segment", blob.get("suggestedFileName") == "blob.zip", blob.get("suggestedFileName"))
+    report = rpc(process, "http/send", base_request(url=f"{BASE}/dl/report.pdf"))["result"]
+    check("content-disposition filename is used", report.get("suggestedFileName") == "report.pdf", report.get("suggestedFileName"))
 
     result = rpc(process, "http/send", base_request(
         method="POST", url=f"{BASE}/echo",
@@ -211,9 +242,15 @@ def main():
     result = rpc(process, "http/send", base_request(method="POST", url=f"{BASE}/echo", body={
         "mode": "formdata", "fields": [{"key": "note", "value": "hi"},
                                        {"key": "avatar", "kind": "file", "fileName": "a.png",
+                                        "contentType": "application/x-png-custom",
                                         "dataBase64": payload}]}))["result"]
+    raw_body = STATE["echo"]["raw"]
     check("multipart content-type", (STATE["echo"]["contentType"] or "").startswith("multipart/form-data"))
     check("multipart summary in preview", "multipart" in result["requestBodyPreview"])
+    check("multipart text field leaves the sidecar", b'name="note"' in raw_body and b"hi" in raw_body)
+    check("multipart file part carries the filename", b'filename="a.png"' in raw_body)
+    check("multipart file bytes leave the sidecar", b"\x89PNG\r\n\x1a\nfake" in raw_body)
+    check("multipart file uses the field content type", b"application/x-png-custom" in raw_body)
     oversized = base64.b64encode(b"x" * (1200 * 1024)).decode()
     result = rpc(process, "http/send", base_request(method="POST", url=f"{BASE}/echo", body={
         "mode": "formdata", "fields": [{"key": "big", "kind": "file", "fileName": "b.bin",

@@ -56,11 +56,13 @@ dbx-http-client/
 │   ├── main.go                    # 方法路由
 │   ├── request.go                 # 请求模型、URL/请求体/认证构造、代理解析
 │   ├── execute.go                 # 执行、跳转链、错误分类、响应体仓库、分块读取
+│   ├── filename.go                # 下载文件名：Content-Disposition / Content-Type / URL
 │   ├── store.go                   # 配置持久化（0600，原子写）
 │   └── go.mod
 ├── tools/                         # 测试脚手架（不属于发布产物）
-│   ├── sidecar-smoke-test.py      # 协议级冒烟测试：直连 Sidecar 跑 41 项断言
-│   ├── ui-e2e-test.mjs            # jsdom 端到端：真实 UI + 真实 Sidecar，36 项断言
+│   ├── sidecar-smoke-test.py      # 协议级冒烟测试：直连 Sidecar 跑 52 项断言
+│   ├── ui-e2e-test.mjs            # jsdom 端到端：真实 UI + 真实 Sidecar，63 项断言
+│   ├── download-name-test.mjs     # 下载文件名规则（与 backend/filename.go 对齐）
 │   ├── test-target-server.py      # 上述两个测试共用的目标 HTTP 服务器
 │   └── run-ui-e2e.sh              # 一键跑端到端测试（自动起停目标服务器）
 ├── LICENSE                        # Apache License 2.0 全文
@@ -77,7 +79,7 @@ dbx-http-client/
 
 - 方法（GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS/TRACE）+ URL 输入，`Enter` 直接发送
 - 参数表与地址栏查询串**双向同步**；请求头支持一键预置常见头
-- 请求体：无 / 原始文本（JSON/XML/文本，带格式化）/ `x-www-form-urlencoded` / `form-data`（含文件字段）
+- 请求体：无 / 原始文本（JSON/XML/文本，带格式化）/ `x-www-form-urlencoded` / `form-data`。form-data 每个字段可在「文本 / 文件」间切换，本地文件经 base64 交给 Sidecar，由 Sidecar 写成带文件名的真实 multipart（可与文本字段混排，界面传输上限 1 MiB）
 - 认证：Basic / Bearer / API Key（可放请求头或查询参数）
 - 选项：超时、跟随跳转与最大跳转数、TLS 校验开关、代理（跟随环境变量 / 直连 / 自定义）、响应体上限
 - 多标签页；`⌘/Ctrl+Enter` 发送、`⌘/Ctrl+S` 保存、`⌘/Ctrl+T` 新标签、`⌘/Ctrl+K` 聚焦地址栏
@@ -88,12 +90,12 @@ dbx-http-client/
 - 状态徽标（按 2xx/3xx/4xx/5xx 着色）、HTTP 版本、总耗时、TTFB、体积、跳转链路
 - 视图：响应体（格式化 / 原始 / 预览）、响应头表、Cookie、请求回显（实际发出的头与体）
 - JSON 语法高亮；图片响应可直接预览；文本响应可复制
-- 超过 256 KiB 的预览会明确标注，可**分块加载完整响应**或让 Sidecar **直接保存到文件**
+- 超过 256 KiB 的预览会明确标注，可**分块加载完整响应**或让 Sidecar **直接保存到文件**。文件名优先用 `Content-Disposition` 的 `filename*` / `filename`，否则用 URL 末段配合 `Content-Type`，最后才是 `download` 加正确后缀
 - 失败时渲染错误卡片：类型（超时 / 取消 / DNS / TLS / 连接 / URL 无效 / 网络）+ 原始报文
 
 **组织与复用**
 
-- 集合：保存 / 另存 / 重命名 / 删除 / 复制，JSON 导入导出
+- 集合：多级子集合（行内「子集合」按钮和右键「新建子集合」）、移动、展开/折叠，保存 / 重命名 / 删除 / 复制，JSON 导入导出。删除集合或子集合会级联删除其中的子集合和请求，确认文案写明数量。0.1.2 之前的扁平 `requests` 会在读取时迁到 `items`
 - 历史：最近 60 条，一键还原整条请求，可清空
 - 环境：多环境变量表，`{{name}}` 在 URL、请求头、参数、请求体、认证字段中统一替换
 - 内置动态变量：`{{$uuid}}`、`{{$timestamp}}`、`{{$isoTimestamp}}`、`{{$randomInt}}`、`{{$randomFloat}}`、`{{$randomBoolean}}`、`{{$randomString}}`
@@ -110,11 +112,12 @@ Sidecar 通过 stdout 的 JSON Lines 收发 protocol v1 报文；stdout 只留�
 | `http/send` | `{ requestId, method, url, headers[], body{mode,raw,contentType,fields[]}, auth{...}, options{...} }` | 见下方 `sendResult` |
 | `http/cancel` | `{ requestId }` | `{ cancelled }` |
 | `http/body` | `{ bodyId, offset, length≤512 KiB }` | `{ bodyId, offset, length, totalBytes, eof, dataBase64, contentType }` |
-| `http/body/save` | `{ bodyId, directory?, fileName? }` | `{ path, bytes }`（目录默认 `~/Downloads`） |
+| `http/body/save` | `{ bodyId, directory?, fileName? }` | `{ path, bytes }`（目录默认 `~/Downloads`；未给 fileName 时按响应头和 URL 推断） |
 | `store/load` | — | `{ path, store, exists }` |
 | `store/save` | `{ store }` | `{ path, bytes, savedAt }` |
 
 `body.mode`：`none` | `raw` | `urlencoded` | `formdata`；`fields[].kind`：`text` | `file`。
+文件字段另带 `fileName`、`contentType`、`dataBase64`。Sidecar 用这些字段写 multipart part：`Content-Disposition` 含 `filename`，`Content-Type` 用字段上的安全媒体类型，否则按内容探测。
 `auth.type`：`none` | `basic` | `bearer` | `apikey`（`in`: `header` | `query`）。
 `options`：`timeoutMs`(500–115000)、`followRedirects`、`maxRedirects`(0–50)、`verifyTls`、
 `maxBodyBytes`(64 KiB–64 MiB)、`progressEvents`、`proxyMode`(`environment`|`direct`|`custom`)、`proxyUrl`。
@@ -122,7 +125,7 @@ Sidecar 通过 stdout 的 JSON Lines 收发 protocol v1 报文；stdout 只留�
 `sendResult` 关键字段：`ok`、`status`、`statusText`、`httpVersion`、`finalUrl`、`durationMs`、
 `firstByteMs`、`sizeBytes`、`contentType`、`headers[]`、`setCookies[]`、`redirects[]`、
 `requestHeaders[]`、`requestBodyPreview`、`bodyId`、`bodyPreviewBase64`、`bodyPreviewBytes`、
-`bodyTruncated`；失败时 `ok:false` 且带 `error: { kind, message }`
+`bodyTruncated`、`suggestedFileName`；失败时 `ok:false` 且带 `error: { kind, message }`
 （`kind` ∈ `timeout|canceled|dns|tls|connection|invalid-url|invalid-body|invalid-proxy|network`）。
 
 `invalid-url` 只表示**请求发出前就判定 URL 不可用**（无法解析、缺协议前缀、协议非 http/https、
@@ -158,7 +161,7 @@ dbx-plugin dev --path . --port 5190
 开发宿主不会替你安装依赖或翻译文案；`.dbx-dev/` 里是明文调试数据，已在 `.gitignore` 中。
 改动 `ui/` 后刷新页面即可；改动 `backend/` 后重启 `dbx-plugin dev`。
 
-协议级回归（推荐在打包前跑一遍，41 项断言覆盖正常、边界与失败路径）：
+协议级回归（推荐在打包前跑一遍，52 项断言覆盖正常、边界与失败路径）：
 
 ```bash
 go build -o dist/backend ./backend
@@ -178,8 +181,8 @@ CLI 会为当前平台构建原生后端、暂存 `manifest.json` / `assets/` / 
 `t8y2/dbx` 的可复用工作流，按目标平台构建未签名候选包，并合并出 `release-candidates.json`：
 
 ```bash
-git tag v0.1.1 && git push origin v0.1.1
-gh release create v0.1.1 --title v0.1.1 --notes "扁平化方法 / 环境 / Content-Type 选择框"
+git tag v0.1.3 && git push origin v0.1.3
+gh release create v0.1.3 --title v0.1.3 --notes "子集合入口、级联删除，以及 form-data 文件上传"
 ```
 
 该工作流有两处**必须注意**的配置：

@@ -7,7 +7,7 @@
   "source": "https://github.com/renpengkai/dbx-plugin-http-client",
   "homepage": "https://github.com/renpengkai/dbx-plugin-http-client",
   "license": "Apache-2.0",
-  "releaseNotes": "0.1.1：工作台请求方法、环境、Content-Type 三个选择框统一为扁平样式，明暗主题下视觉一致。其余能力与 0.1.0 相同：8 种方法、四类请求体、三种认证、多标签页、集合/历史/环境变量、cURL 导入导出；响应侧提供跳转链路、耗时与 TTFB、JSON 高亮、响应头与 Cookie 视图。所有网络请求经 protocol v1 委派给 Go 原生 Sidecar。",
+  "releaseNotes": "0.1.3：集合和子集合行内有「子集合」按钮，右键菜单也可新建子集合。删除集合、子集合或请求前会确认；删除集合/子集合会级联删除其中的子集合和请求，确认文案写明数量。form-data 字段可在「文本 / 文件」间切换，选中的本地文件由 Sidecar 以真实 multipart（含文件名）和文本字段一起发出。另含 0.1.2：多级文件夹与旧数据迁移，以及按 Content-Disposition / Content-Type / URL 推断下载文件名。",
   "localizations": {
     "zh-CN": {
       "name": "HTTP 客户端",

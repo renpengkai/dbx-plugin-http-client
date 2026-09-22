@@ -3,7 +3,7 @@
   "manifest_version": 1,
   "id": "com.jettech.httpclient",
   "name": "HTTP Client",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "publisher": "jettech",
   "description": "A Postman-style HTTP workbench: compose requests, send them through a native sidecar, and inspect responses.",
   "icon": "assets/plugin.svg",

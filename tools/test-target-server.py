@@ -69,6 +69,15 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, json.dumps({"error": "not found"}))
         elif path.startswith("/status/500"):
             self._send(500, json.dumps({"error": "boom"}))
+        elif path.startswith("/dl/sheet"):
+            self._send(200, b"PK\x03\x04fake-xlsx",
+                       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                       {"Content-Disposition": "attachment; filename=\"fallback.xlsx\"; filename*=UTF-8''%E5%AD%A3%E5%BA%A6%E6%8A%A5%E8%A1%A8.xlsx"})
+        elif path.startswith("/dl/photo"):
+            self._send(200, bytes.fromhex("ffd8ffd9"), "image/jpeg")
+        elif path.startswith("/dl/report.pdf"):
+            self._send(200, b"%PDF-1.4", "application/pdf",
+                       {"Content-Disposition": 'attachment; filename="report.pdf"'})
         else:
             self._send(200, json.dumps({"path": path}))
 

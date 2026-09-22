@@ -2,9 +2,14 @@
    mock DBX host bridge, and drives it like a user would. */
 
 import { spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { JSDOM } from "jsdom";
+
+if (!process.env.TEST_HOME) {
+  process.env.TEST_HOME = mkdtempSync(join(tmpdir(), "dbx-http-client-e2e-"));
+}
 
 // Override these with env vars when the plugin lives somewhere else, e.g.
 //   UI_DIR=/path/to/dbx-http-client/ui SIDECAR=/path/to/backend node harness.mjs
@@ -12,7 +17,7 @@ const UI_DIR = process.env.UI_DIR || "/Volumes/PKSSD/note/dbx-http-client/ui";
 const SIDECAR = process.env.SIDECAR || "/tmp/dbxdev/backend";
 const BASE = process.env.BASE || "http://127.0.0.1:18080";
 const SCRIPTS = [
-  "i18n.js", "util.js", "bridge.js", "curl.js", "store.js",
+  "i18n.js", "util.js", "download-name.js", "bridge.js", "curl.js", "store.js",
   "view-sidebar.js", "view-request.js", "view-response.js", "app.js"
 ];
 
@@ -256,6 +261,8 @@ async function main() {
     cssText.includes(".hc-select-flat") && /appearance\s*:\s*none/.test(cssText));
   check("method and environment selects share the flat class",
     $("#method-select").classList.contains("hc-select-flat") && $("#env-select").classList.contains("hc-select-flat"));
+  check("collection head actions stay visible",
+    /\.hc-side-group-head \.hc-list-actions[^{]*\{[^}]*opacity\s*:\s*1/.test(cssText));
 
   /* ---------------------------------------------------- 1. simple GET ---- */
   setInput($("#url-input"), `${BASE}/users`);
@@ -426,9 +433,104 @@ async function main() {
   const saveButton = $$("#modal-host .hc-modal-foot button").find((button) => button.textContent.includes("保存"));
   saveButton.click();
   await sleep(200);
-  check("request saved into a collection", window.HC.store.state.collections.some((collection) => collection.requests.length >= 1),
-    JSON.stringify(window.HC.store.state.collections.map((collection) => `${collection.name}:${collection.requests.length}`)));
+  const savedCount = window.HC.store.state.collections.reduce((sum, collection) => sum + window.HC.store.countRequests(collection.items), 0);
+  check("request saved into a collection", savedCount >= 1,
+    JSON.stringify(window.HC.store.state.collections.map((collection) => `${collection.name}:${window.HC.store.countRequests(collection.items)}`)));
   check("saved request appears in the sidebar", $("#sidebar-body").textContent.includes("echo") || $("#sidebar-body").textContent.includes("未命名"));
+
+  const collection = window.HC.store.state.collections[0];
+  const savedRequest = collection.items.find((item) => item.kind === "request");
+  const folder = window.HC.store.createFolder(collection.id, "", "报表");
+  const nested = window.HC.store.createFolder(collection.id, folder.id, "2024");
+  check("nested folder created under the collection",
+    folder && nested && collection.items.some((item) => item.id === folder.id) && folder.items.some((item) => item.id === nested.id));
+  window.HC.store.moveItem(savedRequest.id, collection.id, nested.id);
+  window.HC.viewSidebar.render();
+  const nestedNode = document.querySelector(`[data-node-id="${nested.id}"]`);
+  check("request moved into the nested folder",
+    nestedNode && nestedNode.textContent.includes(savedRequest.name) && nested.items.some((item) => item.id === savedRequest.id));
+  window.HC.store.toggleCollapsed(folder.id);
+  const folderNode = document.querySelector(`[data-node-id="${folder.id}"]`);
+  const folderBody = Array.from(folderNode.children).find((node) => node.classList.contains("hc-side-group-body"));
+  check("folder collapses", folderBody && folderBody.hidden === true);
+  window.HC.store.toggleCollapsed(folder.id);
+  const expanded = document.querySelector(`[data-node-id="${folder.id}"]`);
+  const expandedBody = Array.from(expanded.children).find((node) => node.classList.contains("hc-side-group-body"));
+  check("folder expands again", expandedBody && expandedBody.hidden === false);
+
+  const deleteFolder = Array.from(expanded.querySelector(".hc-side-group-head").querySelectorAll("button")).find((button) => button.title === "删除");
+  deleteFolder.click();
+  await waitFor(() => document.querySelector("#modal-host .hc-modal"), "delete folder confirm");
+  check("deleting a folder confirms the cascade counts",
+    document.querySelector("#modal-host .hc-modal").textContent.includes("1 个子集合") &&
+    document.querySelector("#modal-host .hc-modal").textContent.includes("1 个请求"),
+    document.querySelector("#modal-host .hc-modal").textContent.replace(/\s+/g, " ").slice(0, 160));
+  const cancelDelete = $$("#modal-host .hc-modal-foot button").find((button) => button.textContent.includes("取消"));
+  cancelDelete.click();
+  await sleep(50);
+  check("cancelling delete keeps the folder", window.HC.store.locate(folder.id));
+  deleteFolder.click();
+  await waitFor(() => document.querySelector("#modal-host .hc-modal"), "delete folder confirm again");
+  const confirmDelete = $$("#modal-host .hc-modal-foot button").find((button) => button.textContent === "删除");
+  confirmDelete.click();
+  await sleep(80);
+  check("confirmed delete removes the folder and its requests",
+    !window.HC.store.locate(folder.id) && !window.HC.store.locate(savedRequest.id));
+
+  window.HC.store.hydrate({
+    collections: [
+      {
+        id: "legacy-col",
+        name: "旧集合",
+        requests: [{ id: "legacy-req", name: "旧请求", method: "GET", url: "https://example.com/v1/users" }]
+      },
+      {
+        id: "legacy-nested",
+        name: "带文件夹",
+        folders: [{ id: "legacy-folder", name: "子目录", requests: [{ id: "legacy-inner", name: "内部", method: "GET", url: "https://example.com/a.zip" }] }],
+        requests: [{ id: "legacy-root", name: "根上", method: "GET", url: "https://example.com/root" }]
+      }
+    ]
+  });
+  const legacy = window.HC.store.state.collections.find((item) => item.id === "legacy-col");
+  const legacyNested = window.HC.store.state.collections.find((item) => item.id === "legacy-nested");
+  check("flat collection migrates onto items",
+    legacy && !legacy.requests && legacy.items.length === 1 && legacy.items[0].kind === "request" && legacy.items[0].name === "旧请求");
+  check("legacy folders migrate beside root requests",
+    legacyNested && legacyNested.items.some((item) => item.kind === "folder" && item.name === "子目录" && item.items[0].name === "内部") &&
+    legacyNested.items.some((item) => item.kind === "request" && item.name === "根上"));
+  window.HC.viewSidebar.render();
+  check("migrated requests show in the sidebar", $("#sidebar-body").textContent.includes("旧请求") && $("#sidebar-body").textContent.includes("子目录"));
+
+  const legacyHead = document.querySelector(`[data-node-id="${legacy.id}"] .hc-side-group-head`);
+  const newSub = legacyHead.querySelector("[data-action=new-subcollection]");
+  check("collection row exposes a sub-collection button", newSub && newSub.textContent.includes("子集合"));
+  newSub.click();
+  await waitFor(() => document.querySelector("#modal-host .hc-modal") && document.querySelector("#modal-host .hc-modal").textContent.includes("新建子集合"), "new subcollection dialog");
+  setInput(document.querySelector("#modal-host .hc-input"), "季度");
+  $$("#modal-host .hc-modal-foot button").find((button) => button.textContent === "确定").click();
+  await sleep(80);
+  const createdFolder = legacy.items.find((item) => item.kind === "folder" && item.name === "季度");
+  check("inline sub-collection button creates a nested folder", !!createdFolder && $("#sidebar-body").textContent.includes("季度"));
+
+  const createdHead = document.querySelector(`[data-node-id="${createdFolder.id}"] .hc-side-group-head`);
+  createdHead.dispatchEvent(new dom.window.MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 24, clientY: 24 }));
+  const contextMenu = document.querySelector("#hc-context-menu");
+  check("folder context menu offers new sub-collection and delete",
+    contextMenu && contextMenu.textContent.includes("新建子集合") && contextMenu.textContent.includes("删除"));
+  Array.from(contextMenu.querySelectorAll("button")).find((button) => button.textContent === "删除").click();
+  await waitFor(() => document.querySelector("#modal-host .hc-modal"), "context delete confirm");
+  $$("#modal-host .hc-modal-foot button").find((button) => button.textContent.includes("取消")).click();
+  await sleep(40);
+  check("cancelling the context-menu delete keeps the sub-collection", window.HC.store.locate(createdFolder.id));
+
+  const requestRow = document.querySelector('[data-node-id="legacy-req"]');
+  const deleteRequest = Array.from(requestRow.querySelectorAll("button")).find((button) => button.title === "删除");
+  deleteRequest.click();
+  await waitFor(() => document.querySelector("#modal-host .hc-modal") && document.querySelector("#modal-host .hc-modal").textContent.includes("旧请求"), "delete request confirm");
+  $$("#modal-host .hc-modal-foot button").find((button) => button.textContent === "删除").click();
+  await sleep(80);
+  check("confirmed delete removes the saved request", !window.HC.store.locate("legacy-req") && !$("#sidebar-body").textContent.includes("旧请求"));
 
   const curlCommand = window.HC.curl.generateCurl(window.HC.store.activeTab(), { resolve: (value) => window.HC.store.resolve(value) });
   check("cURL export contains method and data", curlCommand.includes("curl -X POST") && curlCommand.includes("--data-raw"), curlCommand.slice(0, 60));
@@ -438,7 +540,72 @@ async function main() {
     imported && imported.request.method === "PUT" && imported.request.headers.length === 2 && imported.request.body.raw === '{"a":1}' && imported.request.options.verifyTls === false,
     JSON.stringify(imported && imported.request.method));
 
-  /* --------------------------------------------------- 11. i18n switch -- */
+  /* ---------------------------------------------- 11. file download name -- */
+  methodSelect.value = "GET";
+  fire(methodSelect, "change");
+  const fileTab = window.HC.store.activeTab();
+  fileTab.body.mode = "none";
+  fileTab.body.raw = "";
+  window.HC.viewRequest.render();
+  setInput($("#url-input"), `${BASE}/dl/sheet`);
+  fire($("#url-input"), "change");
+  $("#btn-send").click();
+  await waitFor(() => $("#response-pane .hc-file-card"), "file card", 15000);
+  check("xlsx filename* is shown instead of a generic binary",
+    $("#response-pane .hc-file-card").textContent.includes("季度报表.xlsx"),
+    $("#response-pane .hc-file-card").textContent.slice(0, 80));
+  check("sidecar suggested the same filename", window.HC.store.activeTab().response.suggestedFileName === "季度报表.xlsx");
+  const saveFile = $$("#response-pane .hc-response-head button").find((button) => button.textContent.includes("保存到文件"));
+  saveFile.click();
+  await waitFor(() => $("#toast-host").textContent.includes("季度报表.xlsx"), "saved filename toast", 15000);
+  check("save writes the disposition filename", $("#toast-host").textContent.includes("季度报表.xlsx"), $("#toast-host").textContent);
+
+  setInput($("#url-input"), `${BASE}/dl/photo`);
+  fire($("#url-input"), "change");
+  $("#btn-send").click();
+  await waitFor(() => $("#response-pane .hc-file-card") && $("#response-pane .hc-file-card").textContent.includes("photo.jpg"), "jpeg file card", 15000);
+  check("jpeg without content-disposition uses the url plus .jpg",
+    $("#response-pane .hc-file-card").textContent.includes("photo.jpg"),
+    $("#response-pane .hc-file-card").textContent.slice(0, 80));
+
+  /* ----------------------------------------- 12. form-data file upload -- */
+  methodSelect.value = "POST";
+  fire(methodSelect, "change");
+  const uploadTab = window.HC.store.activeTab();
+  uploadTab.body.mode = "none";
+  uploadTab.body.raw = "";
+  window.HC.viewRequest.render();
+  setInput($("#url-input"), `${BASE}/echo`);
+  fire($("#url-input"), "change");
+  $$("#request-sections .hc-section").find((button) => button.textContent.trim().startsWith("请求体")).click();
+  await waitFor(() => $$("#request-panels .hc-radio").length > 0, "body radios for upload");
+  const formRadio = $$("#request-panels .hc-radio").find((label) => label.textContent.includes("form-data"));
+  formRadio.querySelector("input").checked = true;
+  fire(formRadio.querySelector("input"), "change");
+  await waitFor(() => $("#request-panels .hc-kv-type"), "form-data field type");
+  check("form-data rows can switch between text and file",
+    $("#request-panels .hc-kv-type") && $("#request-panels").textContent.includes("文本") && $("#request-panels").textContent.includes("文件"));
+  const typeSelect = $("#request-panels .hc-kv-type");
+  typeSelect.value = "file";
+  fire(typeSelect, "change");
+  await waitFor(() => $$("#request-panels button").some((button) => button.textContent.includes("选择文件")), "file picker");
+  check("file field shows a file picker", $$("#request-panels button").some((button) => button.textContent.includes("选择文件")));
+  uploadTab.body.fields = [
+    { key: "note", value: "hi", enabled: true, kind: "text" },
+    {
+      key: "avatar", value: "", enabled: true, kind: "file",
+      fileName: "note.txt", contentType: "text/plain",
+      dataBase64: Buffer.from("hello-file").toString("base64")
+    }
+  ];
+  $("#btn-send").click();
+  await waitFor(() => $("#response-pane .hc-code") && $("#response-pane .hc-code").textContent.includes("hello-file"), "multipart echo", 15000);
+  const echoed = $("#response-pane .hc-code").textContent;
+  check("sidecar sent the text field and the file bytes", echoed.includes("hello-file") && echoed.includes("hi"), echoed.slice(0, 180));
+  check("sidecar sent a real multipart part with the filename",
+    echoed.includes("note.txt") && echoed.includes("multipart/form-data"), echoed.slice(0, 220));
+
+  /* --------------------------------------------------- 13. i18n switch -- */
   window.HC.i18n.setLocale("en");
   window.HC.app_render?.();
   window.__hostEmit({ type: "env", locale: "en", theme: { appearance: "light", tokens: {} } });
