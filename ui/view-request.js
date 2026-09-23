@@ -178,14 +178,18 @@
 
   function renderHeaders(panel, tab) {
     const toolbar = el("div", { class: "hc-body-toolbar" });
-    toolbar.append(el("span", { class: "hc-hint", text: "常用请求头：" }));
+    toolbar.append(el("span", { class: "hc-hint", text: t("headers.presets") }));
     ["Accept: application/json", "Content-Type: application/json", "Authorization: Bearer ", "User-Agent: "].forEach((preset) => {
       const [key, value] = preset.split(": ");
       toolbar.append(el("button", {
         class: "hc-btn hc-btn-sm hc-btn-ghost", type: "button", text: key,
         on: {
           click: () => {
-            tab.headers.push({ key, value: value || "", enabled: true });
+            // 先清掉尾部的空白行，再追加预设行，最后补一行新的空行。否则预设会
+            // 排在既有空行之后，界面上就多出一行空列（编辑器始终保留一行待输入）。
+            const rows = tab.headers;
+            while (rows.length && !rows[rows.length - 1].key && !rows[rows.length - 1].value) rows.pop();
+            rows.push({ key, value: value || "", enabled: true });
             store.markDirty(tab);
             render();
           }
@@ -372,7 +376,7 @@
     }
 
     grid.append(el("span", { class: "hc-field-label", text: t("options.maxBodyBytes") }));
-    const sizeSelect = el("select", { class: "hc-select" }, [
+    const sizeSelect = el("select", { class: "hc-select hc-select-flat" }, [
       el("option", { value: "1048576", text: "1 MiB" }),
       el("option", { value: "8388608", text: "8 MiB" }),
       el("option", { value: "33554432", text: "32 MiB" }),

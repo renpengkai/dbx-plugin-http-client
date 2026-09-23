@@ -100,6 +100,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 .hc-field { display: flex; align-items: center; gap: 6px; }
 .hc-field-label { color: var(--hc-muted-fg); font-size: 12px; }
+.hc-field-block { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.hc-field-block .hc-body-toolbar { flex-wrap: nowrap; }
+.hc-field-block .hc-input { flex: 1; min-width: 0; }
 
 .hc-select, .hc-input, .hc-textarea {
   background: var(--hc-bg); border: 1px solid var(--hc-input); border-radius: var(--hc-radius-sm);
@@ -214,6 +217,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .hc-tab-close { border: 0; background: transparent; cursor: pointer; color: inherit; opacity: .6; padding: 0 2px; }
 .hc-tab-close:hover { opacity: 1; color: var(--hc-destructive); }
 .hc-tab-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--hc-warning); flex: 0 0 auto; }
+.hc-context-item:disabled { opacity: .45; cursor: default; }
 
 /* ------------------------------------------------------------- request ---- */
 

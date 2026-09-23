@@ -7,7 +7,7 @@
   "source": "https://github.com/renpengkai/dbx-plugin-http-client",
   "homepage": "https://github.com/renpengkai/dbx-plugin-http-client",
   "license": "Apache-2.0",
-  "releaseNotes": "0.1.3：集合和子集合行内有「子集合」按钮，右键菜单也可新建子集合。删除集合、子集合或请求前会确认；删除集合/子集合会级联删除其中的子集合和请求，确认文案写明数量。form-data 字段可在「文本 / 文件」间切换，选中的本地文件由 Sidecar 以真实 multipart（含文件名）和文本字段一起发出。另含 0.1.2：多级文件夹与旧数据迁移，以及按 Content-Disposition / Content-Type / URL 推断下载文件名。",
+  "releaseNotes": "0.1.4：新增可持久化自定义存储目录，数据不再随 Docker 容器重建而丢失 —— 可在新建「HTTP 客户端」连接时用文件夹选择器指定目录，也可在设置面板中填写并应用，目录指示会写入插件数据目录并在重启后读回。已打开的请求标签页支持右键批量关闭（关闭左边所有 / 关闭右边所有 / 关闭其它 / 关闭所有）。修复点击常用请求头会多出一行空行的问题；选项面板的代理与响应体最大字节数下拉框改为与其他选择框一致的扁平样式。",
   "localizations": {
     "zh-CN": {
       "name": "HTTP 客户端",

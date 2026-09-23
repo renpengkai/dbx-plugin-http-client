@@ -8,7 +8,7 @@
   const t = (key, params) => HC.i18n.t(key, params);
   const el = util.el;
 
-  const VERSION = "0.1.3";
+  const VERSION = "0.1.4";
 
   function staticLabels() {
     document.documentElement.lang = HC.i18n.locale;
@@ -36,7 +36,7 @@
       const node = el("div", { class: `hc-tab${active ? " is-active" : ""}`, title: store.requestTitle(tab) }, [
         el("span", { class: `hc-tag m-${tab.method}`, text: tab.method }),
         el("span", { class: "hc-tab-label", text: store.requestTitle(tab) }),
-        tab.dirty ? el("span", { class: "hc-tab-dot", title: "未保存" }) : null,
+        tab.dirty ? el("span", { class: "hc-tab-dot", title: t("tab.unsaved") }) : null,
         el("button", {
           class: "hc-tab-close", type: "button", text: "✕", title: t("action.close"),
           on: { click: (event) => { event.stopPropagation(); store.closeTab(tab.id); } }
@@ -47,6 +47,7 @@
         HC.viewRequest.render();
         HC.viewResponse.render();
       });
+      node.addEventListener("contextmenu", (event) => openTabMenu(event, tab));
       node.addEventListener("auxclick", (event) => { if (event.button === 1) store.closeTab(tab.id); });
       host.append(node);
     });
@@ -55,6 +56,58 @@
       on: { click: () => { store.createTab(); HC.viewRequest.render(); HC.viewResponse.render(); } }
     }));
   }
+
+  /* ---------------------------------------------------- tab context menu -- */
+
+  let tabMenuNode = null;
+
+  function closeTabMenu() {
+    if (tabMenuNode) { tabMenuNode.remove(); tabMenuNode = null; }
+  }
+
+  function openTabMenu(event, tab) {
+    event.preventDefault();
+    event.stopPropagation();
+    closeTabMenu();
+    const index = store.state.tabs.findIndex((item) => item.id === tab.id);
+    const last = store.state.tabs.length - 1;
+    const items = [
+      { label: t("tab.closeLeft"), disabled: index <= 0, onClick: () => store.closeTabsToSide(tab.id, "left") },
+      { label: t("tab.closeRight"), disabled: index >= last, onClick: () => store.closeTabsToSide(tab.id, "right") },
+      { label: t("tab.closeOthers"), disabled: store.state.tabs.length <= 1, onClick: () => store.closeTabs([tab.id]) },
+      { label: t("tab.closeAll"), onClick: () => store.closeTabs([]) }
+    ];
+    const menu = el("div", { class: "hc-context-menu", id: "hc-tab-menu" });
+    items.forEach((item) => {
+      const button = el("button", {
+        type: "button",
+        class: "hc-context-item",
+        text: item.label,
+        disabled: item.disabled,
+        on: {
+          click: (clickEvent) => {
+            clickEvent.stopPropagation();
+            closeTabMenu();
+            if (item.disabled) return;
+            item.onClick();
+            HC.viewRequest.render();
+            HC.viewResponse.render();
+          }
+        }
+      });
+      menu.append(button);
+    });
+    document.body.append(menu);
+    const width = 168;
+    const left = Math.max(8, Math.min(event.clientX, window.innerWidth - width - 8));
+    const top = Math.max(8, Math.min(event.clientY, window.innerHeight - (items.length * 32 + 12)));
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+    tabMenuNode = menu;
+  }
+
+  document.addEventListener("click", () => closeTabMenu());
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeTabMenu(); });
 
   /* --------------------------------------------------------- environment --- */
 
@@ -221,6 +274,43 @@
     });
   }
 
+  /* Lets the user repoint the store at a custom directory from Settings, so the
+     data survives a Docker container rebuild even when no connection form was
+     used. The sidecar probes the path before switching. */
+  function renderStorageDirField() {
+    const wrap = el("div", { class: "hc-field hc-field-block" });
+    const label = el("span", { class: "hc-field-label", text: t("settings.storageDir") });
+    const input = el("input", {
+      class: "hc-input", type: "text", spellcheck: "false",
+      value: store.state.dirConfigured ? (store.state.storeDir || "") : "",
+      placeholder: t("settings.storageDirPlaceholder")
+    });
+    const apply = el("button", {
+      class: "hc-btn hc-btn-sm hc-btn-primary", type: "button", text: t("settings.applyDir"),
+      disabled: !bridge.backendReady
+    });
+    const row = el("div", { class: "hc-body-toolbar" }, [input, apply]);
+    wrap.append(label, row);
+    wrap.append(el("div", {
+      class: "hc-hint",
+      text: t("settings.storageDirHint") + " " + (t("settings.storageDirDefault") + "：" + (store.state.storePath || "—"))
+    }));
+    apply.addEventListener("click", async () => {
+      const dir = input.value.trim();
+      if (!dir) { util.toast(t("settings.dirFailed", { message: "empty" }), "error"); return; }
+      apply.disabled = true;
+      try {
+        await store.setStoreDir(dir);
+        util.toast(t("settings.dirSaved"), "success");
+      } catch (error) {
+        util.toast(t("settings.dirFailed", { message: (error && error.message) || error }), "error");
+      } finally {
+        apply.disabled = false;
+      }
+    });
+    return wrap;
+  }
+
   function openSettings() {
     util.openModal({
       title: t("dialog.settingsTitle"),
@@ -236,6 +326,7 @@
         row(t("settings.version"), VERSION);
         row(t("misc.dynamicVars"), t("misc.dynamicHint"));
         body.append(grid);
+        body.append(renderStorageDirField());
         body.append(el("div", { class: "hc-hint", text: t("settings.dataHint") }));
         const actions = el("div", { class: "hc-body-toolbar" }, [
           el("button", {

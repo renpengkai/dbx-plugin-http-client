@@ -21,6 +21,8 @@
     activeEnvironmentId: "",
     settings: { sidebarWidth: 260, sidebarCollapsed: false, requestPercent: 45 },
     storePath: "",
+    storeDir: "",
+    dirConfigured: false,
     memoryOnly: true,
     sideView: "collections",
     loaded: false
@@ -99,6 +101,38 @@
     else if (state.activeTabId === id) state.activeTabId = state.tabs[Math.max(0, index - 1)].id;
     persist();
     emit("tabs");
+  }
+
+  /* Closes every tab except the ones whose id survives `keep`, in a single
+     persist/emit pass. Used by the tab-strip context menu (close others /
+     left / right / all). Always leaves at least one tab open. */
+  function closeTabs(keep) {
+    const survivors = state.tabs.filter((tab) => keep.indexOf(tab.id) >= 0);
+    if (!survivors.length) {
+      if (state.tabs.some((tab) => tab.id === state.activeTabId)) {
+        state.tabs = state.tabs.filter((tab) => tab.id === state.activeTabId);
+      } else {
+        state.tabs = state.tabs.slice(0, 1);
+      }
+      state.activeTabId = state.tabs[0] ? state.tabs[0].id : "";
+      if (!state.tabs.length) { createTab(); return; }
+    } else {
+      state.tabs = survivors;
+      if (!survivors.some((tab) => tab.id === state.activeTabId)) {
+        const index = keep.indexOf(state.activeTabId);
+        state.activeTabId = (survivors[index >= 0 ? Math.min(index, survivors.length - 1) : survivors.length - 1]).id;
+      }
+    }
+    persist();
+    emit("tabs");
+  }
+
+  function closeTabsToSide(id, side) {
+    const index = state.tabs.findIndex((tab) => tab.id === id);
+    if (index < 0) return;
+    const keep = state.tabs.filter((tab, position) => (side === "left" ? position >= index : position <= index)).map((tab) => tab.id);
+    if (keep.length === state.tabs.length) return;
+    closeTabs(keep);
   }
 
   function duplicateTab(id) {
@@ -815,12 +849,30 @@
       return;
     }
     try {
-      const result = await HC.bridge.saveStore(document);
+      // The sidecar owns the authoritative store path; sending the configured
+      // directory along lets a change made elsewhere stick on the next save.
+      const result = await HC.bridge.saveStore(document, state.storeDir && state.dirConfigured ? state.storeDir : "");
       state.memoryOnly = false;
       state.storePath = result.path || state.storePath;
+      if (result.dir) state.storeDir = result.dir;
+      if (result.configured !== undefined) state.dirConfigured = !!result.configured;
     } catch (error) {
       state.memoryOnly = true;
     }
+  }
+
+  /* Points the sidecar at a new storage directory and immediately writes the
+     current snapshot there, so switching directories never loses the session. */
+  async function setStoreDir(dir) {
+    const result = await HC.bridge.setStoreDir(String(dir || "").trim());
+    if (result && result.dir) {
+      state.storeDir = result.dir;
+      state.storePath = result.path || state.storePath;
+      state.dirConfigured = !!result.configured;
+    }
+    await persist();
+    emit("settings");
+    return result;
   }
 
   async function init() {
@@ -831,6 +883,8 @@
       try {
         const result = await HC.bridge.loadStore();
         state.storePath = result.path || "";
+        if (result.dir) state.storeDir = result.dir;
+        state.dirConfigured = !!result.configured;
         state.memoryOnly = false;
         if (result && result.exists) sawDocument = true;
         if (result.store) {
@@ -844,6 +898,36 @@
         }
       } catch (error) {
         state.memoryOnly = true;
+      }
+      // A directory carried by the connection form is authoritative for this
+      // session: push it to the sidecar so both sides agree on one location.
+      const contextDir = HC.bridge.contextDir;
+      if (contextDir) {
+        try {
+          const applied = await HC.bridge.setStoreDir(contextDir);
+          if (applied && applied.dir) {
+            state.storeDir = applied.dir;
+            state.storePath = applied.path || state.storePath;
+            state.dirConfigured = !!applied.configured;
+            if (state.storeDir !== contextDir) {
+              // The sidecar normalised (or already used) a different path.
+            }
+          }
+          const reloaded = await HC.bridge.loadStore();
+          if (reloaded && reloaded.store) {
+            state.tabs = [];
+            state.collections = [];
+            state.environments = [];
+            state.history = [];
+            state.activeEnvironmentId = "";
+            hydrate(reloaded.store);
+            sawDocument = true;
+          } else if (reloaded && reloaded.exists) {
+            sawDocument = true;
+          }
+        } catch (error) {
+          // Keep the already-loaded document; the sidecar still persists.
+        }
       }
     } else {
       state.memoryOnly = true;
@@ -863,8 +947,8 @@
   }
 
   window.HC.store = {
-    state, METHODS, subscribe, emit, init, persist, schedulePersist,
-    createTab, activeTab, setActiveTab, closeTab, duplicateTab, markDirty,
+    state, METHODS, subscribe, emit, init, persist, schedulePersist, setStoreDir,
+    createTab, activeTab, setActiveTab, closeTab, closeTabs, closeTabsToSide, duplicateTab, markDirty,
     emptyRequest, snapshotRequest, requestTitle,
     createCollection, renameCollection, deleteCollection,
     createFolder, renameFolder, deleteFolder, toggleCollapsed,
