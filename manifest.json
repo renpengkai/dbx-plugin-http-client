@@ -3,7 +3,7 @@
   "manifest_version": 1,
   "id": "com.jettech.httpclient",
   "name": "HTTP Client",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "publisher": "jettech",
   "description": "A Postman-style HTTP workbench: compose requests, send them through a native sidecar, and inspect responses.",
   "icon": "assets/plugin.svg",
@@ -32,6 +32,39 @@
       "label": "HTTP Client",
       "description": "Compose and send HTTP requests, inspect responses, keep collections and environments.",
       "icon": "assets/plugin.svg"
+    },
+    {
+      "type": "connection-provider",
+      "id": "com.jettech.httpclient.connection",
+      "label": "HTTP Client",
+      "description": "Create an HTTP Client connection to choose where collections and environments are stored.",
+      "icon": "assets/plugin.svg",
+      "database_type": "httpclient",
+      "workbench": "com.jettech.httpclient.workbench",
+      "capabilities": ["test", "connect", "disconnect"],
+      "fields": [
+        {
+          "key": "display_name",
+          "label": "Connection name",
+          "type": "text",
+          "binding": "name",
+          "required": true,
+          "default": "HTTP Client",
+          "description": "Name shown in the connection list."
+        },
+        {
+          "key": "storage_dir",
+          "label": "Storage directory",
+          "type": "text",
+          "binding": "config",
+          "default": "",
+          "placeholder": "e.g. /data/dbx-http-client or D:\\dbx-http-client",
+          "description": "Optional. Where collections, environments, history and tabs are stored (store.json). Point it at a mounted volume so the data survives a container rebuild. Click the folder button to pick a local directory, or type an absolute path. Leave empty to use the plugin's default data directory.",
+          "picker": {
+            "kind": "directory"
+          }
+        }
+      ]
     }
   ],
   "localizations": {
@@ -42,6 +75,21 @@
         "com.jettech.httpclient.workbench": {
           "label": "HTTP 客户端",
           "description": "构造并发送 HTTP 请求、查看响应，管理集合与环境变量。"
+        },
+        "com.jettech.httpclient.connection": {
+          "label": "HTTP 客户端",
+          "description": "新建一个 HTTP 客户端连接，用于指定集合与环境数据的存储目录。",
+          "fields": {
+            "display_name": {
+              "label": "连接名称",
+              "description": "显示在连接列表中的名称。"
+            },
+            "storage_dir": {
+              "label": "数据存储目录",
+              "description": "可选。集合、环境、历史与标签页保存在该目录下的 store.json。建议指向挂载卷，这样 Docker 容器重建后数据不会丢失。点击右侧文件夹按钮选择本地目录，或手动填写绝对路径；留空则使用插件默认数据目录。",
+              "placeholder": "例如：/data/dbx-http-client 或 D:\\dbx-http-client"
+            }
+          }
         }
       }
     }

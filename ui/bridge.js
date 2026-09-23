@@ -14,6 +14,7 @@
   let locale = "zh-CN";
   let appearance = "light";
   let context = {};
+  let contextDir = "";
 
   const ready = (async () => {
     if (!plugin) {
@@ -23,6 +24,7 @@
     try {
       await plugin.ready;
       context = plugin.context || {};
+      applyContext(context);
       locale = plugin.locale || locale;
       appearance = readAppearance(plugin.theme) || appearance;
       applyAppearance(appearance);
@@ -30,7 +32,7 @@
       backendError = String((error && error.message) || error);
       return false;
     }
-    if (plugin.onContext) plugin.onContext((next) => { context = next || {}; });
+    if (plugin.onContext) plugin.onContext((next) => { context = next || {}; applyContext(next || {}); });
     if (plugin.onEvent) {
       plugin.onEvent((message) => {
         const method = message && (message.method || (message.event && message.event.method));
@@ -62,6 +64,32 @@
     if (!value) return;
     appearance = value;
     document.documentElement.dataset.dbxTheme = value;
+  }
+
+  /* The connection form carries the optional storage directory. The config can
+     arrive nested a few different ways, so walk it defensively and cache what
+     we find; store.init() pushes it to the sidecar as a belt-and-braces path. */
+  const DIR_KEYS = ["storage_dir", "storageDir", "storage_path", "storagePath", "data_dir", "dataDir"];
+
+  function pickDir(object, depth) {
+    if (!object || typeof object !== "object" || depth > 4) return "";
+    for (const key of DIR_KEYS) {
+      const value = object[key];
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
+    for (const key of Object.keys(object)) {
+      const value = object[key];
+      if (value && typeof value === "object") {
+        const found = pickDir(value, depth + 1);
+        if (found) return found;
+      }
+    }
+    return "";
+  }
+
+  function applyContext(next) {
+    const dir = pickDir(next, 0);
+    if (dir) contextDir = dir;
   }
 
   function onEnv(listener) {
@@ -120,8 +148,14 @@
     return invoke("store/load", {}, 10000);
   }
 
-  async function saveStore(store) {
-    return invoke("store/save", { store }, 20000);
+  async function saveStore(store, storageDir) {
+    const params = { store };
+    if (storageDir) params.storage_dir = storageDir;
+    return invoke("store/save", params, 20000);
+  }
+
+  async function setStoreDir(dir) {
+    return invoke("store/setDir", { dir }, 10000);
   }
 
   async function copy(text) {
@@ -144,6 +178,7 @@
     get locale() { return locale; },
     get appearance() { return appearance; },
     get context() { return context; },
+    get contextDir() { return contextDir; },
     get hasHost() { return !!plugin; },
     ready,
     onEnv,
@@ -156,6 +191,7 @@
     saveBody,
     loadStore,
     saveStore,
+    setStoreDir,
     copy,
     MAX_INVOKE_TIMEOUT
   };
