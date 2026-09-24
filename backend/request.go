@@ -151,17 +151,17 @@ func (spec *sendRequest) normalize() {
 func buildRequest(spec *sendRequest) (*http.Request, *requestError) {
 	parsed, err := url.Parse(spec.URL)
 	if err != nil {
-		return nil, newRequestError("invalid-url", "URL 解析失败："+err.Error())
+		return nil, newRequestError("invalid-url", "Failed to parse URL: "+err.Error())
 	}
 	scheme := strings.ToLower(parsed.Scheme)
 	if scheme == "" {
-		return nil, newRequestError("invalid-url", "URL 缺少协议前缀，请以 http:// 或 https:// 开头")
+		return nil, newRequestError("invalid-url", "URL is missing a scheme; start with http:// or https://")
 	}
 	if scheme != "http" && scheme != "https" {
-		return nil, newRequestError("invalid-url", fmt.Sprintf("不支持的协议 %q，仅允许 http 与 https", scheme))
+		return nil, newRequestError("invalid-url", fmt.Sprintf("Unsupported scheme %q; only http and https are allowed", scheme))
 	}
 	if parsed.Host == "" {
-		return nil, newRequestError("invalid-url", "URL 缺少主机名")
+		return nil, newRequestError("invalid-url", "URL is missing a hostname")
 	}
 
 	query := parsed.Query()
@@ -177,7 +177,7 @@ func buildRequest(spec *sendRequest) (*http.Request, *requestError) {
 
 	request, err := http.NewRequest(spec.Method, parsed.String(), bodyReader)
 	if err != nil {
-		return nil, newRequestError("invalid-url", "构造请求失败："+err.Error())
+		return nil, newRequestError("invalid-url", "Failed to build request: "+err.Error())
 	}
 	if bodyLength >= 0 {
 		request.ContentLength = bodyLength
@@ -242,15 +242,15 @@ func buildMultipartBody(fields []bodyField) (io.Reader, int64, string, *requestE
 		}
 		if field.Kind == "file" {
 			if field.DataBase64 == "" {
-				return nil, 0, "", newRequestError("invalid-body", fmt.Sprintf("表单文件字段 %q 没有内容", field.Key))
+				return nil, 0, "", newRequestError("invalid-body", fmt.Sprintf("Form file field %q has no content", field.Key))
 			}
 			decoded, err := base64.StdEncoding.DecodeString(field.DataBase64)
 			if err != nil {
-				return nil, 0, "", newRequestError("invalid-body", fmt.Sprintf("表单文件字段 %q 不是合法的 base64 数据", field.Key))
+				return nil, 0, "", newRequestError("invalid-body", fmt.Sprintf("Form file field %q contains invalid base64 data", field.Key))
 			}
 			if len(decoded) > maxInlineFieldBytes {
 				return nil, 0, "", newRequestError("invalid-body", fmt.Sprintf(
-					"表单文件字段 %q 为 %s，超过 1 MiB 的界面传输上限；请改用后端直接上传的大文件方案",
+					"Form file field %q is %s, exceeding the 1 MiB UI transfer limit; use a direct backend upload for larger files",
 					field.Key, humanBytes(int64(len(decoded)))))
 			}
 			fileName := field.FileName
@@ -267,19 +267,19 @@ func buildMultipartBody(fields []bodyField) (io.Reader, int64, string, *requestE
 			header.Set("Content-Type", mediaType)
 			part, err := writer.CreatePart(header)
 			if err != nil {
-				return nil, 0, "", newRequestError("invalid-body", "写入 multipart 字段失败："+err.Error())
+				return nil, 0, "", newRequestError("invalid-body", "Failed to write multipart field: "+err.Error())
 			}
 			if _, err := part.Write(decoded); err != nil {
-				return nil, 0, "", newRequestError("invalid-body", "写入 multipart 字段失败："+err.Error())
+				return nil, 0, "", newRequestError("invalid-body", "Failed to write multipart field: "+err.Error())
 			}
 			continue
 		}
 		if err := writer.WriteField(field.Key, field.Value); err != nil {
-			return nil, 0, "", newRequestError("invalid-body", "写入表单字段失败："+err.Error())
+			return nil, 0, "", newRequestError("invalid-body", "Failed to write form field: "+err.Error())
 		}
 	}
 	if err := writer.Close(); err != nil {
-		return nil, 0, "", newRequestError("invalid-body", "结束 multipart 请求体失败："+err.Error())
+		return nil, 0, "", newRequestError("invalid-body", "Failed to finalize multipart body: "+err.Error())
 	}
 	return bytes.NewReader(buffer.Bytes()), int64(buffer.Len()), writer.FormDataContentType(), nil
 }
@@ -324,12 +324,12 @@ func describeBody(reader io.Reader, totalBytes int64) string {
 	text := string(chunk)
 	if isProbablyBinary(text) {
 		if totalBytes > 0 {
-			return fmt.Sprintf("(二进制请求体，共 %s)", humanBytes(totalBytes))
+			return fmt.Sprintf("(Binary request body, %s total)", humanBytes(totalBytes))
 		}
-		return "(二进制请求体)"
+		return "(Binary request body)"
 	}
 	if totalBytes > int64(len(chunk)) {
-		text += fmt.Sprintf("\n… 共 %s", humanBytes(totalBytes))
+		text += fmt.Sprintf("\n… %s total", humanBytes(totalBytes))
 	}
 	return text
 }

@@ -13,6 +13,9 @@
   function staticLabels() {
     document.documentElement.lang = HC.i18n.locale;
     document.title = t("brand");
+    util.$("#sidebar-splitter").title = t("side.resize");
+    util.$("#pane-splitter").title = t("pane.resize");
+    util.$("#method-select").setAttribute("aria-label", t("request.method"));
     util.$("#brand-name").textContent = t("brand");
     util.$("#btn-toggle-sidebar").title = t("side.toggle");
     util.$("#label-environment").textContent = t("label.environment");
@@ -151,7 +154,7 @@
       return;
     }
     const missing = store.collectMissingVariables(tab);
-    if (missing.length) util.toast(`未定义变量：${missing.join(", ")}`, "error");
+    if (missing.length) util.toast(t("toast.undefinedVariables", { names: missing.join(", ") }), "error");
 
     const requestId = util.uid("run");
     tab.response = null;
@@ -293,7 +296,7 @@
     wrap.append(label, row);
     wrap.append(el("div", {
       class: "hc-hint",
-      text: t("settings.storageDirHint") + " " + (t("settings.storageDirDefault") + "：" + (store.state.storePath || "—"))
+      text: t("settings.storageDirHint") + " " + (t("settings.storageDirDefault") + ": " + (store.state.storePath || "—"))
     }));
     apply.addEventListener("click", async () => {
       const dir = input.value.trim();
@@ -518,7 +521,9 @@
     // The handshake was still in flight when the guard fired. Refresh the toolbar
     // once it lands, otherwise the send button stays disabled for the whole session.
     bridge.ready.then(() => {
-      renderToolbarState();
+      HC.i18n.setLocale(bridge.locale);
+      staticLabels();
+      renderAll();
       if (!bridge.backendReady) util.toast(t("err.backendHint"), "error");
     });
   }

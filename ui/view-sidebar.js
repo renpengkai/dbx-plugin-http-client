@@ -354,7 +354,7 @@
 
   function renderHistory(host) {
     if (!store.state.history.length) {
-      host.append(el("div", { class: "hc-empty", text: "暂无历史记录。" }));
+      host.append(el("div", { class: "hc-empty", text: t("side.emptyHistory") }));
       return;
     }
     const list = el("div", { class: "hc-list" });
@@ -368,7 +368,7 @@
         el("span", { class: `hc-tag m-${entry.method}`, text: entry.method }),
         el("div", { class: "hc-grow" }, [
           el("div", { class: "hc-list-title", text: path }),
-          el("div", { class: "hc-list-sub", text: `${new Date(entry.at).toLocaleTimeString()} · ${util.formatDuration(entry.durationMs)}` })
+          el("div", { class: "hc-list-sub", text: `${new Date(entry.at).toLocaleTimeString(HC.i18n.locale)} · ${util.formatDuration(entry.durationMs)}` })
         ]),
         el("span", {
           class: `hc-status ${util.statusClass(entry.status, entry.ok)}`,
@@ -389,7 +389,7 @@
 
   function renderEnvironments(host) {
     if (!store.state.environments.length) {
-      host.append(el("div", { class: "hc-empty", text: "还没有环境变量，点击上方按钮新建。" }));
+      host.append(el("div", { class: "hc-empty", text: t("side.emptyEnvironments") }));
       host.append(el("div", { class: "hc-hint", text: t("misc.dynamicVars") + "：" + t("misc.dynamicHint") }));
       return;
     }
@@ -439,7 +439,7 @@
   /* --------------------------------------------------------------- dialogs */
 
   function openImportDialog() {
-    const textarea = el("textarea", { class: "hc-textarea", placeholder: '{"collections":[{"name":"示例","items":[{"kind":"folder","name":"用户","items":[{"kind":"request","name":"列表","method":"GET","url":"https://api.example.com/users"}]}]}]}', spellcheck: "false" });
+    const textarea = el("textarea", { class: "hc-textarea", placeholder: JSON.stringify({ collections: [{ name: t("misc.exampleCollection"), items: [{ kind: "folder", name: t("misc.exampleFolder"), items: [{ kind: "request", name: t("misc.exampleRequest"), method: "GET", url: "https://api.example.com/users" }] }] }] }), spellcheck: "false" });
     util.openModal({
       title: t("action.import"),
       render: (body) => {

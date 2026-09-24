@@ -11,7 +11,7 @@
 
   let backendReady = false;
   let backendError = "";
-  let locale = "zh-CN";
+  let locale = "en";
   let appearance = "light";
   let context = {};
   let contextDir = "";
@@ -25,7 +25,7 @@
       await plugin.ready;
       context = plugin.context || {};
       applyContext(context);
-      locale = plugin.locale || locale;
+      locale = HC.i18n.setLocale(plugin.locale);
       appearance = readAppearance(plugin.theme) || appearance;
       applyAppearance(appearance);
     } catch (error) {
@@ -100,8 +100,8 @@
       if (next) applyAppearance(next);
       listener({ locale, appearance });
     };
-    window.addEventListener("dbx-plugin-env", handler);
-    return () => window.removeEventListener("dbx-plugin-env", handler);
+    document.addEventListener("dbx-plugin-env", handler);
+    return () => document.removeEventListener("dbx-plugin-env", handler);
   }
 
   function onProgress(listener) {
@@ -169,7 +169,7 @@
   }
 
   function notifyLocale(value) {
-    locale = value || locale;
+    locale = HC.i18n.setLocale(value);
   }
 
   window.HC.bridge = {
