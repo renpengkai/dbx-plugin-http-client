@@ -163,9 +163,9 @@
 
   function renderParams(panel, tab) {
     const hint = el("div", { class: "hc-hint" });
-    hint.append(document.createTextNode("URL 查询参数与地址栏保持同步；"));
-    hint.append(el("code", { text: "{{变量}}" }));
-    hint.append(document.createTextNode(" 会在发送时替换。"));
+    hint.append(document.createTextNode(t("params.syncHint")));
+    hint.append(el("code", { text: t("params.variable") }));
+    hint.append(document.createTextNode(t("params.resolveHint")));
     panel.append(hint);
     const kvHost = el("div", {});
     panel.append(kvHost);
@@ -222,7 +222,7 @@
     panel.append(modeRow);
 
     if (tab.body.mode === "none") {
-      panel.append(el("div", { class: "hc-hint", text: "该请求不携带请求体。" }));
+      panel.append(el("div", { class: "hc-hint", text: t("body.empty") }));
       return;
     }
 
