@@ -8,7 +8,7 @@
   const t = (key, params) => HC.i18n.t(key, params);
   const el = util.el;
 
-  const VERSION = "0.1.4";
+  const VERSION = "0.1.7";
 
   function staticLabels() {
     document.documentElement.lang = HC.i18n.locale;
