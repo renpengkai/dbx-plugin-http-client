@@ -75,7 +75,7 @@
   function formatProgress(progress) {
     if (!progress) return "";
     if (progress.phase === "receiving" && progress.received) return util.formatBytes(progress.received);
-    return progress.phase === "receiving" ? "接收响应…" : "正在发送…";
+    return progress.phase === "receiving" ? t("response.receiving") : t("response.sendingProgress");
   }
 
   function renderStatusBar(tab, result) {

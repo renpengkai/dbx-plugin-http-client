@@ -228,7 +228,7 @@ func (p *plugin) handleStoreLoad() (any, *dbxpluginsdk.PluginError) {
 				"store": nil, "exists": false,
 			}, nil
 		}
-		return nil, dbxpluginsdk.NewError(-32000, "读取配置失败："+err.Error())
+		return nil, dbxpluginsdk.NewError(-32000, "Failed to read configuration: "+err.Error())
 	}
 	var document json.RawMessage = payload
 	if !json.Valid(payload) {
@@ -252,10 +252,10 @@ func (p *plugin) handleStoreSave(params json.RawMessage) (any, *dbxpluginsdk.Plu
 		return nil, pluginErr
 	}
 	if len(payload.Store) == 0 {
-		return nil, dbxpluginsdk.NewError(-32602, "缺少 store 内容")
+		return nil, dbxpluginsdk.NewError(-32602, "Missing store content")
 	}
 	if len(payload.Store) > maxStoreBytes {
-		return nil, dbxpluginsdk.NewError(-32602, fmt.Sprintf("工作台数据超过 %s，请清理历史记录", humanBytes(maxStoreBytes)))
+		return nil, dbxpluginsdk.NewError(-32602, fmt.Sprintf("Workbench data exceeds %s; please clear the history", humanBytes(maxStoreBytes)))
 	}
 	if dir := strings.TrimSpace(payload.Dir); dir != "" {
 		setDir(dir)
@@ -265,18 +265,18 @@ func (p *plugin) handleStoreSave(params json.RawMessage) (any, *dbxpluginsdk.Plu
 	p.store.mutex.Lock()
 	defer p.store.mutex.Unlock()
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return nil, dbxpluginsdk.NewError(-32000, "创建配置目录失败："+err.Error())
+		return nil, dbxpluginsdk.NewError(-32000, "Failed to create configuration directory: "+err.Error())
 	}
 	temporary := fmt.Sprintf("%s.%d.tmp", path, time.Now().UnixNano())
 	if err := os.WriteFile(temporary, payload.Store, 0o600); err != nil {
-		return nil, dbxpluginsdk.NewError(-32000, "写入临时文件失败："+err.Error())
+		return nil, dbxpluginsdk.NewError(-32000, "Failed to write temporary file: "+err.Error())
 	}
 	if err := os.Rename(temporary, path); err != nil {
 		// A few sandboxes and network filesystems refuse to replace an existing
 		// file; fall back to a direct write so settings still persist.
 		if writeErr := os.WriteFile(path, payload.Store, 0o600); writeErr != nil {
 			_ = os.Remove(temporary)
-			return nil, dbxpluginsdk.NewError(-32000, "替换配置文件失败："+err.Error())
+			return nil, dbxpluginsdk.NewError(-32000, "Failed to replace configuration file: "+err.Error())
 		}
 		_ = os.Remove(temporary)
 	}
@@ -300,10 +300,10 @@ func (p *plugin) handleStoreSetDir(params json.RawMessage) (any, *dbxpluginsdk.P
 		dir = strings.TrimSpace(payload.StorageDir)
 	}
 	if dir == "" {
-		return nil, dbxpluginsdk.NewError(-32602, "存储目录不能为空")
+		return nil, dbxpluginsdk.NewError(-32602, "Storage directory cannot be empty")
 	}
 	if err := ensureDir(dir); err != nil {
-		return nil, dbxpluginsdk.NewError(-32000, "无法写入该目录："+err.Error())
+		return nil, dbxpluginsdk.NewError(-32000, "Cannot write to this directory: "+err.Error())
 	}
 	setDir(dir)
 	return map[string]any{"dir": storeDir(), "path": storeFilePath(), "configured": true}, nil
@@ -318,11 +318,11 @@ func (p *plugin) handleStoreSetDir(params json.RawMessage) (any, *dbxpluginsdk.P
 func (p *plugin) handleConnectionTest() (any, *dbxpluginsdk.PluginError) {
 	dir := storeDir()
 	if err := ensureDir(dir); err != nil {
-		return map[string]any{"success": false, "message": "无法写入存储目录：" + err.Error()}, nil
+		return map[string]any{"success": false, "message": "Cannot write to storage directory: " + err.Error()}, nil
 	}
 	return map[string]any{
 		"success": true,
-		"message": "HTTP 客户端已就绪，集合、环境与历史会保存到该目录下的 store.json。",
+		"message": "HTTP Client is ready. Collections, environments and history will be saved to store.json in this directory.",
 		"dir":     dir,
 	}, nil
 }
@@ -331,17 +331,17 @@ func (p *plugin) handleConnectionConnect(params json.RawMessage) (any, *dbxplugi
 	var values map[string]any
 	if len(params) > 0 {
 		if err := json.Unmarshal(params, &values); err != nil {
-			return nil, dbxpluginsdk.NewError(-32602, "连接参数无效："+err.Error())
+			return nil, dbxpluginsdk.NewError(-32602, "Invalid connection parameters: "+err.Error())
 		}
 	}
 	absorbParams(params)
 	if dir := connDirFromValues(values); dir != "" {
 		if err := ensureDir(dir); err != nil {
-			return nil, dbxpluginsdk.NewError(-32000, "无法写入存储目录："+err.Error())
+			return nil, dbxpluginsdk.NewError(-32000, "Cannot write to storage directory: "+err.Error())
 		}
 		setDir(dir)
 	} else if err := ensureDir(storeDir()); err != nil {
-		return nil, dbxpluginsdk.NewError(-32000, "无法写入存储目录："+err.Error())
+		return nil, dbxpluginsdk.NewError(-32000, "Cannot write to storage directory: "+err.Error())
 	}
 	connectionID := ""
 	if value, ok := values["connectionId"].(string); ok {

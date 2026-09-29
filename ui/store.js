@@ -140,7 +140,7 @@
     if (!source) return;
     const clone = JSON.parse(JSON.stringify(source));
     clone.id = util.uid("req");
-    clone.name = `${source.name} 副本`;
+    clone.name = HC.i18n.t("misc.copyName", { name: source.name });
     clone.response = null;
     clone.sending = false;
     clone.dirty = true;

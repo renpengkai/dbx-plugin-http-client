@@ -4,6 +4,22 @@
 (function () {
   const dictionaries = {
     "zh-CN": {
+      "side.emptyHistory": "暂无历史记录。",
+      "side.emptyEnvironments": "还没有环境变量，点击上方按钮新建。",
+      "side.resize": "拖动调整宽度",
+      "pane.resize": "拖动调整高度",
+      "request.method": "HTTP 方法",
+      "params.syncHint": "URL 查询参数与地址栏保持同步；",
+      "params.variable": "{{变量}}",
+      "params.resolveHint": " 会在发送时替换。",
+      "body.empty": "该请求不携带请求体。",
+      "response.receiving": "接收响应…",
+      "response.sendingProgress": "正在发送…",
+      "toast.undefinedVariables": "未定义变量：{names}",
+      "misc.copyName": "{name} 副本",
+      "misc.exampleCollection": "示例",
+      "misc.exampleFolder": "用户",
+      "misc.exampleRequest": "列表",
       "brand": "HTTP 客户端",
       "side.toggle": "折叠 / 展开侧栏",
       "side.collections": "集合",
@@ -194,6 +210,22 @@
       "settings.clearAll": "清空全部数据"
     },
     "en": {
+      "side.emptyHistory": "No history yet.",
+      "side.emptyEnvironments": "No environments yet. Use the button above to create one.",
+      "side.resize": "Drag to resize width",
+      "pane.resize": "Drag to resize height",
+      "request.method": "HTTP method",
+      "params.syncHint": "URL query parameters stay in sync with the address bar; ",
+      "params.variable": "{{variable}}",
+      "params.resolveHint": " is replaced when the request is sent.",
+      "body.empty": "This request has no body.",
+      "response.receiving": "Receiving response…",
+      "response.sendingProgress": "Sending…",
+      "toast.undefinedVariables": "Undefined variables: {names}",
+      "misc.copyName": "{name} Copy",
+      "misc.exampleCollection": "Example",
+      "misc.exampleFolder": "Users",
+      "misc.exampleRequest": "List",
       "brand": "HTTP Client",
       "side.toggle": "Collapse / expand sidebar",
       "side.collections": "Collections",
@@ -390,10 +422,10 @@
     }
   };
 
-  let locale = "zh-CN";
+  let locale = "en";
 
   function normalize(value) {
-    if (!value) return "zh-CN";
+    if (!value) return "en";
     const lower = String(value).toLowerCase();
     if (lower.startsWith("zh")) return "zh-CN";
     return "en";
@@ -411,8 +443,8 @@
   }
 
   function t(key, params) {
-    const table = dictionaries[locale] || dictionaries["zh-CN"];
-    const text = table[key] !== undefined ? table[key] : dictionaries["zh-CN"][key];
+    const table = dictionaries[locale] || dictionaries["en"];
+    const text = table[key] !== undefined ? table[key] : dictionaries["en"][key];
     return text === undefined ? key : interpolate(text, params);
   }
 

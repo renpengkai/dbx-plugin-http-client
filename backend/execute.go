@@ -212,7 +212,7 @@ func describeSentRequest(request *http.Request) []headerOut {
 		out = append(out, headerOut{Key: "User-Agent", Value: "Go-http-client/1.1"})
 	}
 	if !has("Accept-Encoding") {
-		out = append(out, headerOut{Key: "Accept-Encoding", Value: "gzip (由客户端自动添加)"})
+		out = append(out, headerOut{Key: "Accept-Encoding", Value: "gzip (automatically added by the client)"})
 	}
 	if request.ContentLength > 0 {
 		out = append(out, headerOut{Key: "Content-Length", Value: fmt.Sprintf("%d", request.ContentLength)})
@@ -255,7 +255,7 @@ func (e *executor) execute(spec *sendRequest, emitter *dbxpluginsdk.Emitter) *se
 			}
 		}
 	case "formdata":
-		result.RequestBodyPreview = fmt.Sprintf("(multipart/form-data，共 %d 个字段)", len(spec.Body.Fields))
+		result.RequestBodyPreview = fmt.Sprintf("(multipart/form-data, %d fields)", len(spec.Body.Fields))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), deadlineFrom(spec.Options.TimeoutMs))
@@ -277,10 +277,10 @@ func (e *executor) execute(spec *sendRequest, emitter *dbxpluginsdk.Emitter) *se
 	} else {
 		client.CheckRedirect = func(next *http.Request, via []*http.Request) error {
 			if scheme := strings.ToLower(next.URL.Scheme); scheme != "http" && scheme != "https" {
-				return fmt.Errorf("拒绝跳转到非 HTTP(S) 地址：%s", next.URL.String())
+				return fmt.Errorf("Refused redirect to a non-HTTP(S) URL: %s", next.URL.String())
 			}
 			if len(via) > spec.Options.MaxRedirects {
-				return fmt.Errorf("超过最大跳转次数 %d", spec.Options.MaxRedirects)
+				return fmt.Errorf("Exceeded the maximum of %d redirects", spec.Options.MaxRedirects)
 			}
 			status := 0
 			if next.Response != nil {
@@ -333,7 +333,7 @@ func (e *executor) execute(spec *sendRequest, emitter *dbxpluginsdk.Emitter) *se
 	if int64(len(payload)) > spec.Options.MaxBodyBytes {
 		payload = payload[:spec.Options.MaxBodyBytes]
 		result.BodyTruncated = true
-		result.Notice = fmt.Sprintf("响应体超过 %s，仅保留前 %s", humanBytes(spec.Options.MaxBodyBytes), humanBytes(spec.Options.MaxBodyBytes))
+		result.Notice = fmt.Sprintf("Response body exceeds %s; only the first %s are kept", humanBytes(spec.Options.MaxBodyBytes), humanBytes(spec.Options.MaxBodyBytes))
 	}
 
 	result.SizeBytes = int64(len(payload))
@@ -397,19 +397,19 @@ func resolveProxy(options requestOptions) (func(*http.Request) (*url.URL, error)
 	case "custom":
 		raw := strings.TrimSpace(options.ProxyURL)
 		if raw == "" {
-			return nil, "", newRequestError("invalid-proxy", "代理模式为自定义，但未填写代理地址")
+			return nil, "", newRequestError("invalid-proxy", "Custom proxy mode requires a proxy URL")
 		}
 		if !strings.Contains(raw, "://") {
 			raw = "http://" + raw
 		}
 		parsed, err := url.Parse(raw)
 		if err != nil || parsed.Host == "" {
-			return nil, "", newRequestError("invalid-proxy", "代理地址无法解析："+raw)
+			return nil, "", newRequestError("invalid-proxy", "Cannot parse proxy URL: "+raw)
 		}
 		switch strings.ToLower(parsed.Scheme) {
 		case "http", "https", "socks5", "socks5h":
 		default:
-			return nil, "", newRequestError("invalid-proxy", "不支持的代理协议："+parsed.Scheme)
+			return nil, "", newRequestError("invalid-proxy", "Unsupported proxy scheme: "+parsed.Scheme)
 		}
 		return http.ProxyURL(parsed), "custom:" + parsed.String(), nil
 	default:
@@ -461,30 +461,30 @@ func httpVersion(response *http.Response) string {
 func classifyError(err error) *requestError {
 	switch {
 	case errors.Is(err, context.DeadlineExceeded):
-		return newRequestError("timeout", "请求超时：服务器在规定时间内没有返回结果")
+		return newRequestError("timeout", "Request timed out: the server did not respond within the time limit")
 	case errors.Is(err, context.Canceled):
-		return newRequestError("canceled", "请求已被取消")
+		return newRequestError("canceled", "Request cancelled")
 	}
 	var dnsErr *net.DNSError
 	if errors.As(err, &dnsErr) {
-		return newRequestError("dns", "域名解析失败："+dnsErr.Error())
+		return newRequestError("dns", "DNS lookup failed: "+dnsErr.Error())
 	}
 	var hostnameErr x509.HostnameError
 	var authorityErr x509.UnknownAuthorityError
 	var invalidErr x509.CertificateInvalidError
 	if errors.As(err, &hostnameErr) || errors.As(err, &authorityErr) || errors.As(err, &invalidErr) {
-		return newRequestError("tls", "TLS 证书校验失败："+err.Error())
+		return newRequestError("tls", "TLS certificate verification failed: "+err.Error())
 	}
 	var recordErr tls.RecordHeaderError
 	if errors.As(err, &recordErr) || strings.Contains(err.Error(), "x509") || strings.Contains(err.Error(), "certificate") {
-		return newRequestError("tls", "TLS 握手失败："+err.Error())
+		return newRequestError("tls", "TLS handshake failed: "+err.Error())
 	}
 	var opErr *net.OpError
 	if errors.As(err, &opErr) {
-		return newRequestError("connection", "连接失败："+err.Error())
+		return newRequestError("connection", "Connection failed: "+err.Error())
 	}
 	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
-		return newRequestError("network", "连接被中断，响应未完整读取："+err.Error())
+		return newRequestError("network", "Connection interrupted before the full response was read: "+err.Error())
 	}
 	// Everything left is a transport failure, never a URL problem: http.Client.Do
 	// wraps *every* failure in *url.Error, so that type says nothing about the URL.
@@ -528,7 +528,7 @@ func (p *plugin) handleReadBody(params json.RawMessage) (any, *dbxpluginsdk.Plug
 	}
 	entry, ok := p.executor.bodies.get(payload.BodyID)
 	if !ok {
-		return nil, dbxpluginsdk.NewError(-32004, "响应体已过期或不存在："+payload.BodyID)
+		return nil, dbxpluginsdk.NewError(-32004, "Response body has expired or does not exist: "+payload.BodyID)
 	}
 	total := int64(len(entry.payload))
 	offset := payload.Offset
@@ -569,7 +569,7 @@ func (p *plugin) handleSaveBody(params json.RawMessage) (any, *dbxpluginsdk.Plug
 	}
 	entry, ok := p.executor.bodies.get(payload.BodyID)
 	if !ok {
-		return nil, dbxpluginsdk.NewError(-32004, "响应体已过期或不存在："+payload.BodyID)
+		return nil, dbxpluginsdk.NewError(-32004, "Response body has expired or does not exist: "+payload.BodyID)
 	}
 	name := sanitizeFileName(payload.FileName)
 	if name == "" {
@@ -581,19 +581,19 @@ func (p *plugin) handleSaveBody(params json.RawMessage) (any, *dbxpluginsdk.Plug
 	if directory == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
-			return nil, dbxpluginsdk.NewError(-32000, "无法定位用户主目录："+err.Error())
+			return nil, dbxpluginsdk.NewError(-32000, "Cannot locate user home directory: "+err.Error())
 		}
 		directory = filepath.Join(home, "Downloads")
 	}
 	if !filepath.IsAbs(directory) {
-		return nil, dbxpluginsdk.NewError(-32602, "保存目录必须是绝对路径")
+		return nil, dbxpluginsdk.NewError(-32602, "Save directory must be an absolute path")
 	}
 	if err := os.MkdirAll(directory, 0o755); err != nil {
-		return nil, dbxpluginsdk.NewError(-32000, "创建目录失败："+err.Error())
+		return nil, dbxpluginsdk.NewError(-32000, "Failed to create directory: "+err.Error())
 	}
 	target := uniquePath(directory, name)
 	if err := os.WriteFile(target, entry.payload, 0o644); err != nil {
-		return nil, dbxpluginsdk.NewError(-32000, "写入文件失败："+err.Error())
+		return nil, dbxpluginsdk.NewError(-32000, "Failed to write file: "+err.Error())
 	}
 	return map[string]any{"path": target, "bytes": len(entry.payload)}, nil
 }

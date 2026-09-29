@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -9,54 +9,54 @@
   <body>
     <div class="hc-app" id="app">
       <header class="hc-topbar">
-        <button class="hc-icon-btn" id="btn-toggle-sidebar" type="button" title="折叠/展开侧栏">☰</button>
+        <button class="hc-icon-btn" id="btn-toggle-sidebar" type="button" title="Collapse / expand sidebar">☰</button>
         <div class="hc-brand">
           <span class="hc-brand-mark">H</span>
           <span id="brand-name">HTTP Client</span>
         </div>
         <div class="hc-grow"></div>
         <label class="hc-field hc-field-inline">
-          <span class="hc-field-label" id="label-environment">环境</span>
+          <span class="hc-field-label" id="label-environment">Environment</span>
           <select id="env-select" class="hc-select hc-select-flat"></select>
         </label>
-        <button class="hc-btn hc-btn-ghost" id="btn-import-curl" type="button">导入 cURL</button>
-        <button class="hc-btn hc-btn-ghost" id="btn-settings" type="button">设置</button>
+        <button class="hc-btn hc-btn-ghost" id="btn-import-curl" type="button">Import cURL</button>
+        <button class="hc-btn hc-btn-ghost" id="btn-settings" type="button">Settings</button>
       </header>
 
       <div class="hc-body">
         <aside class="hc-sidebar" id="sidebar">
           <nav class="hc-side-tabs" role="tablist">
-            <button class="hc-side-tab is-active" data-side-view="collections" type="button">集合</button>
-            <button class="hc-side-tab" data-side-view="history" type="button">历史</button>
-            <button class="hc-side-tab" data-side-view="environments" type="button">环境</button>
+            <button class="hc-side-tab is-active" data-side-view="collections" type="button">Collections</button>
+            <button class="hc-side-tab" data-side-view="history" type="button">History</button>
+            <button class="hc-side-tab" data-side-view="environments" type="button">Environments</button>
           </nav>
           <div class="hc-side-actions" id="sidebar-actions"></div>
           <div class="hc-side-body" id="sidebar-body"></div>
         </aside>
-        <div class="hc-splitter" id="sidebar-splitter" title="拖动调整宽度"></div>
+        <div class="hc-splitter" id="sidebar-splitter" title="Drag to resize width"></div>
 
         <main class="hc-main">
           <div class="hc-tabstrip" id="tabstrip"></div>
 
           <section class="hc-request" id="request-pane">
             <div class="hc-url-row">
-              <select id="method-select" class="hc-select hc-select-flat hc-method" aria-label="HTTP 方法"></select>
+              <select id="method-select" class="hc-select hc-select-flat hc-method" aria-label="HTTP method"></select>
               <div class="hc-url-wrap">
                 <input id="url-input" class="hc-input hc-url" type="text" spellcheck="false" autocomplete="off"
                        placeholder="https://api.example.com/users" />
                 <span class="hc-url-flag" id="url-flag" hidden></span>
               </div>
-              <button class="hc-btn hc-btn-primary" id="btn-send" type="button">发送</button>
-              <button class="hc-btn hc-btn-danger" id="btn-cancel" type="button" hidden>取消</button>
-              <button class="hc-icon-btn" id="btn-save" type="button" title="保存到集合">☆</button>
-              <button class="hc-icon-btn" id="btn-copy-curl" type="button" title="复制为 cURL">⌘</button>
+              <button class="hc-btn hc-btn-primary" id="btn-send" type="button">Send</button>
+              <button class="hc-btn hc-btn-danger" id="btn-cancel" type="button" hidden>Cancel</button>
+              <button class="hc-icon-btn" id="btn-save" type="button" title="Save to collection">☆</button>
+              <button class="hc-icon-btn" id="btn-copy-curl" type="button" title="Copy as cURL">⌘</button>
             </div>
 
             <div class="hc-sections" id="request-sections"></div>
             <div class="hc-panels" id="request-panels"></div>
           </section>
 
-          <div class="hc-splitter hc-splitter-h" id="pane-splitter" title="拖动调整高度"></div>
+          <div class="hc-splitter hc-splitter-h" id="pane-splitter" title="Drag to resize height"></div>
 
           <section class="hc-response" id="response-pane"></section>
         </main>
