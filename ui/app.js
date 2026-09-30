@@ -8,7 +8,7 @@
   const t = (key, params) => HC.i18n.t(key, params);
   const el = util.el;
 
-  const VERSION = "0.1.7";
+  const VERSION = "0.1.8";
 
   function staticLabels() {
     document.documentElement.lang = HC.i18n.locale;
@@ -23,8 +23,9 @@
     util.$("#btn-settings").textContent = t("action.settings");
     util.$("#btn-send").textContent = t("action.send");
     util.$("#btn-cancel").textContent = t("action.cancel");
-    util.$("#btn-save").title = t("action.save");
     util.$("#btn-copy-curl").title = t("action.copyCurl");
+    const saveMenu = util.$("#btn-save-menu");
+    if (saveMenu) saveMenu.title = `${t("action.saveAs")} (${modLabel()}+Shift+S)`;
     util.$$(".hc-side-tab").forEach((button) => {
       button.textContent = t(`side.${button.dataset.sideView}`);
     });
@@ -63,9 +64,52 @@
   /* ---------------------------------------------------- tab context menu -- */
 
   let tabMenuNode = null;
+  let saveMenuNode = null;
 
   function closeTabMenu() {
     if (tabMenuNode) { tabMenuNode.remove(); tabMenuNode = null; }
+  }
+
+  function closeSaveMenu() {
+    if (saveMenuNode) { saveMenuNode.remove(); saveMenuNode = null; }
+  }
+
+  function openSaveMenu(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    closeTabMenu();
+    if (saveMenuNode) { closeSaveMenu(); return; }
+    const mod = modLabel();
+    const items = [
+      { label: t("action.saveInPlace"), hint: `${mod}+S`, onClick: () => saveRequest() },
+      { label: t("action.saveAs"), hint: `${mod}+Shift+S`, onClick: () => saveRequestAs() }
+    ];
+    const menu = el("div", { class: "hc-context-menu", id: "hc-save-menu", role: "menu" });
+    items.forEach((item) => {
+      menu.append(el("button", {
+        type: "button",
+        class: "hc-context-item",
+        role: "menuitem",
+        on: {
+          click: (clickEvent) => {
+            clickEvent.stopPropagation();
+            closeSaveMenu();
+            item.onClick();
+          }
+        }
+      }, [
+        el("span", { text: item.label }),
+        el("span", { class: "hc-context-hint", text: item.hint })
+      ]));
+    });
+    document.body.append(menu);
+    const rect = event.currentTarget.getBoundingClientRect();
+    const width = 196;
+    const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8));
+    const top = Math.min(rect.bottom + 4, window.innerHeight - 80);
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+    saveMenuNode = menu;
   }
 
   function openTabMenu(event, tab) {
@@ -109,8 +153,10 @@
     tabMenuNode = menu;
   }
 
-  document.addEventListener("click", () => closeTabMenu());
-  document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeTabMenu(); });
+  document.addEventListener("click", () => { closeTabMenu(); closeSaveMenu(); });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") { closeTabMenu(); closeSaveMenu(); }
+  });
 
   /* --------------------------------------------------------- environment --- */
 
@@ -125,18 +171,57 @@
 
   /* -------------------------------------------------------------- toolbar -- */
 
+  function modLabel() {
+    return /Mac|iPhone|iPad/.test(navigator.platform || "") ? "⌘" : "Ctrl";
+  }
+
+  function savedRequestExists(tab) {
+    if (!tab || !tab.savedRequestId) return null;
+    const located = store.locate(tab.savedRequestId);
+    if (!located || located.item.kind !== "request") return null;
+    return located;
+  }
+
   function renderToolbarState() {
     const tab = store.activeTab();
     const send = util.$("#btn-send");
     const cancel = util.$("#btn-cancel");
     const save = util.$("#btn-save");
-    if (!tab) return;
+    if (!tab || !save) return;
     send.hidden = !!tab.sending;
     cancel.hidden = !tab.sending;
     send.disabled = !bridge.backendReady;
     send.title = bridge.backendReady ? t("action.send") : t("err.backendHint");
-    save.textContent = tab.savedRequestId ? (tab.dirty ? "★" : "✦") : "☆";
-    save.title = t("action.save");
+    const exists = savedRequestExists(tab);
+    save.textContent = exists ? (tab.dirty ? "★" : "✦") : "☆";
+    save.title = exists
+      ? `${t("action.saveInPlace")} (${modLabel()}+S)`
+      : `${t("action.save")} (${modLabel()}+S)`;
+  }
+
+  function syncDirtyIndicators() {
+    const nodes = util.$$("#tabstrip .hc-tab");
+    store.state.tabs.forEach((tab, index) => {
+      const node = nodes[index];
+      if (!node) return;
+      let dot = node.querySelector(".hc-tab-dot");
+      if (tab.dirty && !dot) {
+        dot = el("span", { class: "hc-tab-dot", title: t("tab.unsaved") });
+        const close = node.querySelector(".hc-tab-close");
+        if (close) node.insertBefore(dot, close);
+        else node.append(dot);
+      } else if (!tab.dirty && dot) {
+        dot.remove();
+      } else if (dot) {
+        dot.title = t("tab.unsaved");
+      }
+    });
+    util.$$("#sidebar-body .hc-list-item").forEach((row) => {
+      const dot = row.querySelector(".hc-dirty-dot");
+      if (!dot) return;
+      const dirty = store.state.tabs.some((tab) => tab.savedRequestId === row.dataset.nodeId && tab.dirty);
+      dot.hidden = !dirty;
+    });
   }
 
   /* -------------------------------------------------------------- sending -- */
@@ -191,10 +276,49 @@
     await bridge.cancel(tab.requestId);
   }
 
+  function finishSave(okMessage) {
+    if (okMessage) util.toast(okMessage, "success");
+    renderTabs();
+    HC.viewSidebar.render();
+    renderToolbarState();
+    const save = util.$("#btn-save");
+    if (!save) return;
+    save.textContent = "✓";
+    save.classList.add("is-saved");
+    setTimeout(() => {
+      save.classList.remove("is-saved");
+      renderToolbarState();
+    }, 900);
+  }
+
+  function saveInPlace(tab) {
+    const located = savedRequestExists(tab);
+    if (!located) return false;
+    const folderId = located.parent ? located.parent.id : "";
+    const name = (tab.name && tab.name !== t("tab.untitled")) ? tab.name : (located.item.name || store.requestTitle(tab));
+    store.saveRequestTo(located.collection.id, tab, name, folderId);
+    finishSave(t("toast.saved"));
+    return true;
+  }
+
   async function saveRequest() {
     const tab = store.activeTab();
     if (!tab) return;
-    const nameInput = el("input", { class: "hc-input", type: "text", value: store.requestTitle(tab) });
+    if (saveInPlace(tab)) return;
+    openSaveDialog(tab, false);
+  }
+
+  async function saveRequestAs() {
+    const tab = store.activeTab();
+    if (!tab) return;
+    openSaveDialog(tab, true);
+  }
+
+  function openSaveDialog(tab, asCopy) {
+    const initialName = asCopy && savedRequestExists(tab)
+      ? t("misc.copyName", { name: tab.name || store.requestTitle(tab) })
+      : store.requestTitle(tab);
+    const nameInput = el("input", { class: "hc-input", type: "text", value: initialName });
     const collectionSelect = el("select", { class: "hc-select hc-select-flat" });
     const folderSelect = el("select", { class: "hc-select hc-select-flat" });
     const fillCollections = () => {
@@ -214,7 +338,7 @@
     fillFolders();
     collectionSelect.addEventListener("change", fillFolders);
     util.openModal({
-      title: t("dialog.saveTitle"),
+      title: asCopy ? t("dialog.saveAsTitle") : t("dialog.saveTitle"),
       render: (body) => {
         body.append(el("label", { class: "hc-field" }, [el("span", { class: "hc-field-label", text: t("dialog.name") }), nameInput]));
         body.append(el("label", { class: "hc-field" }, [el("span", { class: "hc-field-label", text: t("dialog.collection") }), collectionSelect]));
@@ -224,17 +348,14 @@
       actions: [
         { label: t("action.cancel2"), onClick: (api) => api.close() },
         {
-          label: t("action.save2"), kind: "primary",
+          label: asCopy ? t("action.saveAs") : t("action.save2"), kind: "primary",
           onClick: (api) => {
             const name = nameInput.value.trim() || store.requestTitle(tab);
             let collectionId = collectionSelect.value;
             if (!collectionId) collectionId = store.createCollection(t("misc.untitledCollection")).id;
-            store.saveRequestTo(collectionId, tab, name, folderSelect.value);
-            util.toast(t("toast.saved"), "success");
+            store.saveRequestTo(collectionId, tab, name, folderSelect.value, asCopy ? { copy: true } : null);
             api.close();
-            renderTabs();
-            HC.viewSidebar.render();
-            renderToolbarState();
+            finishSave(t("toast.saved"));
           }
         }
       ]
@@ -412,6 +533,7 @@
     util.$("#btn-send").addEventListener("click", send);
     util.$("#btn-cancel").addEventListener("click", cancel);
     util.$("#btn-save").addEventListener("click", saveRequest);
+    util.$("#btn-save-menu").addEventListener("click", (event) => openSaveMenu(event));
     util.$("#btn-copy-curl").addEventListener("click", copyCurl);
     util.$("#btn-import-curl").addEventListener("click", openCurlImport);
     util.$("#btn-settings").addEventListener("click", openSettings);
@@ -461,7 +583,7 @@
 
     store.subscribe((reason) => {
       if (reason === "loaded" || reason === "tabs") { renderTabs(); renderToolbarState(); }
-      if (reason === "tab-dirty") renderToolbarState();
+      if (reason === "tab-dirty") { renderToolbarState(); syncDirtyIndicators(); }
       if (reason === "sidebar") HC.viewSidebar.render();
       if (reason === "environments") { renderEnvironmentSelect(); HC.viewSidebar.render(); }
       if (reason === "loaded") { HC.viewRequest.render(); HC.viewResponse.render(); }
@@ -470,10 +592,24 @@
     document.addEventListener("keydown", (event) => {
       const primary = event.metaKey || event.ctrlKey;
       if (!primary) return;
+      const sidebarFocused = event.target && event.target.closest && event.target.closest("#sidebar");
       if (event.key === "Enter") { event.preventDefault(); send(); }
-      else if (event.key.toLowerCase() === "s") { event.preventDefault(); saveRequest(); }
+      else if (event.key.toLowerCase() === "s") {
+        if (!util.$("#modal-host").hidden) return;
+        event.preventDefault();
+        if (event.shiftKey) saveRequestAs();
+        else saveRequest();
+      }
       else if (event.key.toLowerCase() === "t") { event.preventDefault(); store.createTab(); HC.viewRequest.render(); HC.viewResponse.render(); }
-      else if (event.key.toLowerCase() === "k") { event.preventDefault(); util.$("#url-input").focus(); }
+      else if (event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        if (sidebarFocused) HC.viewSidebar.focusSearch();
+        else util.$("#url-input").focus();
+      }
+      else if (event.key.toLowerCase() === "f" && sidebarFocused) {
+        event.preventDefault();
+        HC.viewSidebar.focusSearch();
+      }
     });
 
     window.addEventListener("beforeunload", () => { store.persist(); });

@@ -19,7 +19,7 @@ import (
 
 const (
 	pluginID      = "com.jettech.httpclient"
-	pluginVersion = "0.1.7"
+	pluginVersion = "0.1.8"
 )
 
 type plugin struct {
@@ -82,6 +82,8 @@ func (p *plugin) Handle(
 		return p.handleReadBody(params)
 	case "http/body/save":
 		return p.handleSaveBody(params)
+	case "file/writeText":
+		return p.handleWriteText(params)
 	case "connection/test":
 		return p.handleConnectionTest()
 	case "connection/connect":

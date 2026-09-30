@@ -261,8 +261,10 @@ async function main() {
     cssText.includes(".hc-select-flat") && /appearance\s*:\s*none/.test(cssText));
   check("method and environment selects share the flat class",
     $("#method-select").classList.contains("hc-select-flat") && $("#env-select").classList.contains("hc-select-flat"));
-  check("collection head actions stay visible",
-    /\.hc-side-group-head \.hc-list-actions[^{]*\{[^}]*opacity\s*:\s*1/.test(cssText));
+  check("row actions stay hidden until hover",
+    /\.hc-list-actions\s*\{[^}]*opacity\s*:\s*0/.test(cssText) &&
+    /\.hc-side-group-head:hover \.hc-list-actions/.test(cssText) &&
+    !/\.hc-side-group-head \.hc-list-actions\s*\{[^}]*opacity\s*:\s*1/.test(cssText));
 
   /* ---------------------------------------------------- 1. simple GET ---- */
   setInput($("#url-input"), `${BASE}/users`);
@@ -367,8 +369,8 @@ async function main() {
   $("#btn-send").click();
   await sleep(400);
   check("non-http scheme rejected with a friendly message",
-    $("#response-pane .hc-error-card") && $("#response-pane .hc-error-card").textContent.includes("不支持的协议"),
-    ($("#response-pane .hc-error-card") || {}).textContent?.slice(0, 60));
+    $("#response-pane .hc-error-card") && /不支持的协议|Unsupported scheme/.test($("#response-pane .hc-error-card").textContent),
+    ($("#response-pane .hc-error-card") || {}).textContent?.slice(0, 80));
 
   /* ------------------------------------------- 7. oversized body flow -- */
   // The body test left the tab on POST; the oversized fixture is a GET endpoint.
@@ -427,6 +429,41 @@ async function main() {
   check("environment variables resolved before sending", $("#response-pane .hc-code").textContent.includes("变量先生"));
   check("environment selector shows the active environment", $("#env-select").value === environment.id);
 
+  let rejectedEnvironment = false;
+  try { window.HC.store.parseEnvironmentDocument("{"); } catch (error) { rejectedEnvironment = /JSON/.test(error.message); }
+  check("invalid environment json is rejected", rejectedEnvironment);
+  const postmanEnvironments = window.HC.store.parseEnvironmentDocument(JSON.stringify({
+    name: "dev",
+    values: [{ key: "token", value: "abc", enabled: true, type: "secret" }],
+    _postman_variable_scope: "environment"
+  }));
+  check("postman environment json imports variables",
+    postmanEnvironments.length === 1 && postmanEnvironments[0].variables[0].key === "token" && postmanEnvironments[0].variables[0].value === "abc");
+  const kept = window.HC.store.importEnvironments(postmanEnvironments, "keep");
+  check("same-name import can keep both",
+    kept.added === 1 && window.HC.store.state.environments.filter((item) => item.name.indexOf("dev") === 0).length >= 2);
+  const overwritten = window.HC.store.importEnvironments(window.HC.store.parseEnvironmentDocument(JSON.stringify({
+    kind: "dbx-http-client-environments",
+    version: 1,
+    environments: [{ name: "dev", variables: [{ key: "host", value: "https://override.example", enabled: true }] }]
+  })), "overwrite");
+  const devEnv = window.HC.store.state.environments.find((item) => item.name === "dev");
+  check("same-name import can overwrite",
+    overwritten.overwritten === 1 && devEnv.variables.some((row) => row.value === "https://override.example"));
+  $$(".hc-side-tab").find((button) => button.dataset.sideView === "environments").click();
+  await sleep(40);
+  check("environment panel offers import and export",
+    $("#sidebar-actions").textContent.includes("导入") && $("#sidebar-actions").textContent.includes("导出"));
+  $$("#sidebar-actions button").find((button) => button.textContent === "导出").click();
+  await waitFor(() => document.querySelector("#modal-host .hc-modal") && document.querySelector("#modal-host .hc-modal").textContent.includes("导出环境"), "environment export dialog");
+  check("environment export can choose all or the current one",
+    document.querySelector("#modal-host select").textContent.includes("全部环境") &&
+    document.querySelector("#modal-host select").textContent.includes("当前环境"));
+  $$("#modal-host .hc-modal-foot button").find((button) => button.textContent.includes("取消")).click();
+  await sleep(40);
+  $$(".hc-side-tab").find((button) => button.dataset.sideView === "collections").click();
+  await sleep(40);
+
   /* ------------------------------------------------- 10. save + export -- */
   $("#btn-save").click();
   await waitFor(() => document.querySelector("#modal-host .hc-modal"), "save dialog");
@@ -437,6 +474,23 @@ async function main() {
   check("request saved into a collection", savedCount >= 1,
     JSON.stringify(window.HC.store.state.collections.map((collection) => `${collection.name}:${window.HC.store.countRequests(collection.items)}`)));
   check("saved request appears in the sidebar", $("#sidebar-body").textContent.includes("echo") || $("#sidebar-body").textContent.includes("未命名"));
+
+  const savedId = window.HC.store.activeTab().savedRequestId;
+  check("first save clears the dirty flag", window.HC.store.activeTab().dirty === false && !!savedId);
+  setInput($("#url-input"), `${$("#url-input").value}/v2`);
+  await sleep(40);
+  check("editing a saved request marks it dirty", window.HC.store.activeTab().dirty === true);
+  check("dirty dot shows on the active tab", !!$("#tabstrip .hc-tab.is-active .hc-tab-dot"));
+  $("#btn-save").click();
+  await sleep(80);
+  check("saving an existing request does not open a dialog", $("#modal-host").hidden === true);
+  check("in-place save keeps the same request id and clears dirty",
+    window.HC.store.activeTab().savedRequestId === savedId && window.HC.store.activeTab().dirty === false);
+  check("silent save shows a toast", $("#toast-host").textContent.includes("已保存"));
+  document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "S", ctrlKey: true, shiftKey: true, bubbles: true }));
+  await waitFor(() => document.querySelector("#modal-host .hc-modal") && document.querySelector("#modal-host .hc-modal").textContent.includes("另存为"), "save as dialog");
+  $$("#modal-host .hc-modal-foot button").find((button) => button.textContent.includes("取消")).click();
+  await sleep(40);
 
   const collection = window.HC.store.state.collections[0];
   const savedRequest = collection.items.find((item) => item.kind === "request");
@@ -458,8 +512,13 @@ async function main() {
   const expandedBody = Array.from(expanded.children).find((node) => node.classList.contains("hc-side-group-body"));
   check("folder expands again", expandedBody && expandedBody.hidden === false);
 
-  const deleteFolder = Array.from(expanded.querySelector(".hc-side-group-head").querySelectorAll("button")).find((button) => button.title === "删除");
-  deleteFolder.click();
+  async function openRowMenu(row) {
+    row.querySelector("[data-action=more]").click();
+    await waitFor(() => document.querySelector("#hc-context-menu"), "row menu");
+    return document.querySelector("#hc-context-menu");
+  }
+  let folderMenu = await openRowMenu(expanded.querySelector(".hc-side-group-head"));
+  Array.from(folderMenu.querySelectorAll("button")).find((button) => button.dataset.action === "delete").click();
   await waitFor(() => document.querySelector("#modal-host .hc-modal"), "delete folder confirm");
   check("deleting a folder confirms the cascade counts",
     document.querySelector("#modal-host .hc-modal").textContent.includes("1 个子集合") &&
@@ -469,7 +528,8 @@ async function main() {
   cancelDelete.click();
   await sleep(50);
   check("cancelling delete keeps the folder", window.HC.store.locate(folder.id));
-  deleteFolder.click();
+  folderMenu = await openRowMenu(document.querySelector(`[data-node-id="${folder.id}"] .hc-side-group-head`));
+  Array.from(folderMenu.querySelectorAll("button")).find((button) => button.dataset.action === "delete").click();
   await waitFor(() => document.querySelector("#modal-host .hc-modal"), "delete folder confirm again");
   const confirmDelete = $$("#modal-host .hc-modal-foot button").find((button) => button.textContent === "删除");
   confirmDelete.click();
@@ -503,8 +563,25 @@ async function main() {
   check("migrated requests show in the sidebar", $("#sidebar-body").textContent.includes("旧请求") && $("#sidebar-body").textContent.includes("子目录"));
 
   const legacyHead = document.querySelector(`[data-node-id="${legacy.id}"] .hc-side-group-head`);
-  const newSub = legacyHead.querySelector("[data-action=new-subcollection]");
-  check("collection row exposes a sub-collection button", newSub && newSub.textContent.includes("子集合"));
+  check("collection name tooltip is the full name", legacyHead.querySelector(".hc-list-title").title === "旧集合");
+  check("collection row keeps actions in a more button",
+    legacyHead.querySelector("[data-action=more]") && !legacyHead.querySelector(".hc-mini-btn"));
+  const search = $("#sidebar-search-input");
+  search.value = "旧请求";
+  fire(search, "input");
+  await sleep(40);
+  check("search shows the matching request", $("#sidebar-body").textContent.includes("旧请求"));
+  check("search highlights the match", !!$("#sidebar-body mark.hc-search-hit"));
+  check("search hides collections that do not match", !$("#sidebar-body").textContent.includes("带文件夹"));
+  const matchBody = document.querySelector('[data-node-id="legacy-col"] .hc-side-group-body');
+  check("search expands the parent of a match", matchBody && matchBody.hidden === false);
+  search.value = "";
+  fire(search, "input");
+  await sleep(40);
+  check("clearing search restores hidden collections", $("#sidebar-body").textContent.includes("带文件夹"));
+  const collectionMenu = await openRowMenu(document.querySelector(`[data-node-id="${legacy.id}"] .hc-side-group-head`));
+  const newSub = collectionMenu.querySelector("[data-action=new-subcollection]");
+  check("collection more menu exposes new sub-collection", newSub && newSub.textContent.includes("子集合"));
   newSub.click();
   await waitFor(() => document.querySelector("#modal-host .hc-modal") && document.querySelector("#modal-host .hc-modal").textContent.includes("新建子集合"), "new subcollection dialog");
   setInput(document.querySelector("#modal-host .hc-input"), "季度");
@@ -525,8 +602,8 @@ async function main() {
   check("cancelling the context-menu delete keeps the sub-collection", window.HC.store.locate(createdFolder.id));
 
   const requestRow = document.querySelector('[data-node-id="legacy-req"]');
-  const deleteRequest = Array.from(requestRow.querySelectorAll("button")).find((button) => button.title === "删除");
-  deleteRequest.click();
+  const requestMenu = await openRowMenu(requestRow);
+  Array.from(requestMenu.querySelectorAll("button")).find((button) => button.dataset.action === "delete").click();
   await waitFor(() => document.querySelector("#modal-host .hc-modal") && document.querySelector("#modal-host .hc-modal").textContent.includes("旧请求"), "delete request confirm");
   $$("#modal-host .hc-modal-foot button").find((button) => button.textContent === "删除").click();
   await sleep(80);

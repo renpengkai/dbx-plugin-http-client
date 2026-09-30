@@ -30,6 +30,10 @@
             <button class="hc-side-tab" data-side-view="history" type="button">History</button>
             <button class="hc-side-tab" data-side-view="environments" type="button">Environments</button>
           </nav>
+          <div class="hc-side-search" id="sidebar-search-wrap">
+            <input id="sidebar-search-input" class="hc-input" type="search" spellcheck="false" autocomplete="off"
+                   placeholder="Search collections, requests, URLs" aria-label="Search saved requests" />
+          </div>
           <div class="hc-side-actions" id="sidebar-actions"></div>
           <div class="hc-side-body" id="sidebar-body"></div>
         </aside>
@@ -48,7 +52,10 @@
               </div>
               <button class="hc-btn hc-btn-primary" id="btn-send" type="button">Send</button>
               <button class="hc-btn hc-btn-danger" id="btn-cancel" type="button" hidden>Cancel</button>
-              <button class="hc-icon-btn" id="btn-save" type="button" title="Save to collection">☆</button>
+              <div class="hc-save-split" id="save-split">
+                <button class="hc-icon-btn" id="btn-save" type="button" title="Save to collection">☆</button>
+                <button class="hc-icon-btn hc-save-caret" id="btn-save-menu" type="button" title="Save as" aria-haspopup="menu">▾</button>
+              </div>
               <button class="hc-icon-btn" id="btn-copy-curl" type="button" title="Copy as cURL">⌘</button>
             </div>
 

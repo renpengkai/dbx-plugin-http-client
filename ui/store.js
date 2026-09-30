@@ -408,20 +408,23 @@
     }
   }
 
-  function saveRequestTo(collectionId, tab, name, folderId) {
+  function saveRequestTo(collectionId, tab, name, folderId, options) {
+    const asCopy = !!(options && options.copy);
     let collection = state.collections.find((item) => item.id === collectionId);
     if (!collection) collection = createCollection(t("misc.untitledCollection"));
     if (!Array.isArray(collection.items)) collection.items = [];
     const targetFolderId = folderId === undefined ? (tab.folderId || "") : (folderId || "");
     const snapshot = snapshotRequest(tab, name);
     snapshot.kind = "request";
+    // Save As must not reuse the original id, or the copy would replace it.
+    if (asCopy) snapshot.id = util.uid("saved");
     let items = folderItems(collection, targetFolderId);
     let resolvedFolder = targetFolderId;
     if (!items) {
       items = collection.items;
       resolvedFolder = "";
     }
-    const existing = tab.savedRequestId ? locate(tab.savedRequestId) : null;
+    const existing = !asCopy && tab.savedRequestId ? locate(tab.savedRequestId) : null;
     const samePlace = existing && existing.item.kind === "request" &&
       existing.collection.id === collection.id &&
       ((existing.parent && existing.parent.id) || "") === resolvedFolder;
@@ -662,6 +665,122 @@
     persist();
     emit("environments");
     emit("request");
+  }
+
+  /* Environment files stay a separate document from store.json so importing
+     them cannot rewrite collections, history, or tabs. Existing environments
+     keep their ids when a same-name import overwrites variables in place. */
+
+  function exportEnvironmentDocument(scope, environmentId) {
+    let source = state.environments.slice();
+    if (environmentId) source = state.environments.filter((item) => item.id === environmentId);
+    else if (scope === "current") source = state.environments.filter((item) => item.id === state.activeEnvironmentId);
+    return {
+      version: 1,
+      kind: "dbx-http-client-environments",
+      environments: source.map(serializeEnvironment)
+    };
+  }
+
+  function serializeEnvironment(environment) {
+    return {
+      name: environment.name,
+      variables: (environment.variables || []).filter((row) => row && String(row.key || "").trim()).map((row) => ({
+        key: String(row.key),
+        value: row.value == null ? "" : String(row.value),
+        enabled: row.enabled !== false
+      }))
+    };
+  }
+
+  function parseEnvironmentDocument(text) {
+    let document;
+    try {
+      document = JSON.parse(text);
+    } catch (error) {
+      throw new Error(t("env.invalidJson"));
+    }
+    const environments = extractEnvironmentList(document).map(normalizeImportedEnvironment).filter(Boolean);
+    if (!environments.length) throw new Error(t("env.noneFound"));
+    return environments;
+  }
+
+  function extractEnvironmentList(document) {
+    if (Array.isArray(document)) return document;
+    if (!document || typeof document !== "object") return [];
+    if (Array.isArray(document.environments)) return document.environments;
+    if (document.environment && typeof document.environment === "object") return [document.environment];
+    if (looksLikeEnvironment(document)) return [document];
+    return [];
+  }
+
+  function looksLikeEnvironment(document) {
+    if (!document || typeof document !== "object" || Array.isArray(document)) return false;
+    const scope = document._postman_variable_scope;
+    if (scope === "environment" || scope === "globals") return true;
+    return typeof document.name === "string" && (Array.isArray(document.variables) || Array.isArray(document.values));
+  }
+
+  function normalizeImportedEnvironment(raw) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const name = String(raw.name || "").trim();
+    if (!name) return null;
+    const rows = Array.isArray(raw.variables) ? raw.variables : (Array.isArray(raw.values) ? raw.values : []);
+    const variables = [];
+    rows.forEach((row) => {
+      if (!row || typeof row !== "object") return;
+      const key = String(row.key || "").trim();
+      if (!key) return;
+      variables.push({
+        key,
+        value: row.value == null ? "" : String(row.value),
+        enabled: row.enabled !== false
+      });
+    });
+    if (!variables.length) variables.push(util.emptyRow());
+    return { name, variables };
+  }
+
+  function environmentNamesCollide(list) {
+    const names = {};
+    state.environments.forEach((item) => { names[item.name] = true; });
+    return (list || []).filter((item) => item && names[item.name]).map((item) => item.name);
+  }
+
+  function uniqueEnvironmentName(name) {
+    const taken = {};
+    state.environments.forEach((item) => { taken[item.name] = true; });
+    const base = `${name} ${t("env.copySuffix")}`;
+    if (!taken[base]) return base;
+    let index = 2;
+    while (taken[`${base} ${index}`]) index += 1;
+    return `${base} ${index}`;
+  }
+
+  function importEnvironments(list, mode) {
+    let added = 0;
+    let overwritten = 0;
+    (list || []).forEach((incoming) => {
+      if (!incoming || !incoming.name) return;
+      const existing = state.environments.find((item) => item.name === incoming.name);
+      if (existing && mode === "overwrite") {
+        existing.variables = JSON.parse(JSON.stringify(incoming.variables || []));
+        overwritten += 1;
+        return;
+      }
+      const name = existing ? uniqueEnvironmentName(incoming.name) : incoming.name;
+      const environment = {
+        id: util.uid("env"),
+        name,
+        variables: JSON.parse(JSON.stringify(incoming.variables && incoming.variables.length ? incoming.variables : [util.emptyRow()]))
+      };
+      state.environments.push(environment);
+      added += 1;
+      if (!state.activeEnvironmentId) state.activeEnvironmentId = environment.id;
+    });
+    persist();
+    emit("environments");
+    return { added, overwritten };
   }
 
   /* ------------------------------------------------------------ variables -- */
@@ -957,6 +1076,7 @@
     importCollection, migrateCollection,
     pushHistory, clearHistory, openHistoryEntry,
     createEnvironment, deleteEnvironment, activeEnvironment, setActiveEnvironment,
+    exportEnvironmentDocument, parseEnvironmentDocument, importEnvironments, environmentNamesCollide,
     variableMap, resolve, unresolvedVariables, collectMissingVariables, buildSpec,
     serializable, hydrate
   };

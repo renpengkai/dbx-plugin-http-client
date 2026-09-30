@@ -82,7 +82,7 @@ dbx-http-client/
 - 请求体：无 / 原始文本（JSON/XML/文本，带格式化）/ `x-www-form-urlencoded` / `form-data`。form-data 每个字段可在「文本 / 文件」间切换，本地文件经 base64 交给 Sidecar，由 Sidecar 写成带文件名的真实 multipart（可与文本字段混排，界面传输上限 1 MiB）
 - 认证：Basic / Bearer / API Key（可放请求头或查询参数）
 - 选项：超时、跟随跳转与最大跳转数、TLS 校验开关、代理（跟随环境变量 / 直连 / 自定义）、响应体上限
-- 多标签页；标签页右键可**批量关闭**（关闭左边所有 / 关闭右边所有 / 关闭其它 / 关闭所有），`⌘/Ctrl+Enter` 发送、`⌘/Ctrl+S` 保存、`⌘/Ctrl+T` 新标签、`⌘/Ctrl+K` 聚焦地址栏
+- 多标签页；标签页右键可**批量关闭**（关闭左边所有 / 关闭右边所有 / 关闭其它 / 关闭所有），`⌘/Ctrl+Enter` 发送、`⌘/Ctrl+S` 保存（已在集合中的请求原地保存，不再弹窗；未保存请求才弹出命名对话框）、`⌘/Ctrl+Shift+S` 另存为、`⌘/Ctrl+T` 新标签、`⌘/Ctrl+K` 聚焦地址栏。侧栏获得焦点时 `⌘/Ctrl+K` 或 `⌘/Ctrl+F` 聚焦集合搜索。编辑过的请求在标签上显示未保存圆点
 - 请求进行中可**取消**；接收阶段通过 `http/progress` 事件回传进度
 
 **响应**
@@ -95,9 +95,9 @@ dbx-http-client/
 
 **组织与复用**
 
-- 集合：多级子集合（行内「子集合」按钮和右键「新建子集合」）、移动、展开/折叠，保存 / 重命名 / 删除 / 复制，JSON 导入导出。删除集合或子集合会级联删除其中的子集合和请求，确认文案写明数量。0.1.2 之前的扁平 `requests` 会在读取时迁到 `items`
+- 集合：多级子集合、移动、展开/折叠，保存 / 重命名 / 删除 / 复制，JSON 导入导出。行内操作收进悬停或选中时出现的「⋯」菜单（右键同样可用），长名称省略并用提示显示全文。删除集合或子集合会级联删除其中的子集合和请求，确认文案写明数量。0.1.2 之前的扁平 `requests` 会在读取时迁到 `items`。侧栏顶部可按名称、URL、方法即时搜索，匹配项高亮并自动展开父级；清空后恢复原来的展开状态
 - 历史：最近 60 条，一键还原整条请求，可清空
-- 环境：多环境变量表，`{{name}}` 在 URL、请求头、参数、请求体、认证字段中统一替换
+- 环境：多环境变量表，`{{name}}` 在 URL、请求头、参数、请求体、认证字段中统一替换。可把全部或当前环境导出为 JSON；导入时校验文件，同名环境可选择覆盖或保留两者。也接受 Postman 环境 JSON
 - 内置动态变量：`{{$uuid}}`、`{{$timestamp}}`、`{{$isoTimestamp}}`、`{{$randomInt}}`、`{{$randomFloat}}`、`{{$randomBoolean}}`、`{{$randomString}}`
 - cURL：一键复制当前请求为 cURL；粘贴 cURL 反向导入（`-X/-H/-d/-u/-F/--url/-k/-L/-x/--max-time/--data-urlencode/-G/-I/-b/-A/-e`）
 - 中英双语；跟随 DBX 明暗主题令牌
@@ -113,6 +113,7 @@ Sidecar 通过 stdout 的 JSON Lines 收发 protocol v1 报文；stdout 只留�
 | `http/cancel` | `{ requestId }` | `{ cancelled }` |
 | `http/body` | `{ bodyId, offset, length≤512 KiB }` | `{ bodyId, offset, length, totalBytes, eof, dataBase64, contentType }` |
 | `http/body/save` | `{ bodyId, directory?, fileName? }` | `{ path, bytes }`（目录默认 `~/Downloads`；未给 fileName 时按响应头和 URL 推断） |
+| `file/writeText` | `{ content, fileName?, directory? }` | `{ path, bytes }`（环境导出在没有系统保存对话框时的落盘；目录默认 `~/Downloads`，正文上限 2 MiB） |
 | `connection/test` | — | `{ success, message, dir }`（校验存储目录可写） |
 | `connection/connect` | `{ connectionId? , storage_dir?, config? }` | `{ success, connectionId, dir, path, configured }` |
 | `connection/disconnect` | `{ connectionId? }` | `{ success }` |
