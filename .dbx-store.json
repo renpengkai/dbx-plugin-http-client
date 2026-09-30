@@ -7,7 +7,7 @@
   "source": "https://github.com/renpengkai/dbx-plugin-http-client",
   "homepage": "https://github.com/renpengkai/dbx-plugin-http-client",
   "license": "Apache-2.0",
-  "releaseNotes": "0.1.7：默认界面语言改为英语，并在宿主握手完成后跟随 DBX 的语言设置；补齐中英文文案键，避免部分提示硬编码中文。另含 0.1.4：可持久化自定义存储目录（连接表单文件夹选择器 / 设置面板均可配置，目录指示写入插件数据目录并在重启后读回）、请求标签页右键批量关闭，以及常用请求头空行与选项面板扁平下拉样式修正。",
+  "releaseNotes": "0.1.8：侧栏集合树改为悬停「⋯」菜单，长名称省略并显示完整提示；已保存请求 Ctrl+S 原地保存不再弹窗，并提供另存为与未保存标记；侧栏可按名称、URL、方法搜索；环境支持 JSON 导入导出（含 Postman 环境文件，同名可覆盖或保留两者）。另含 0.1.7：默认界面语言改为英语，并在宿主握手完成后跟随 DBX 的语言设置。",
   "localizations": {
     "zh-CN": {
       "name": "HTTP 客户端",

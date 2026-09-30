@@ -100,8 +100,14 @@
       if (next) applyAppearance(next);
       listener({ locale, appearance });
     };
+    // The dev host dispatches on window; DBX itself dispatches on document.
+    // Listen to both so a non-bubbling event is observed either way.
     document.addEventListener("dbx-plugin-env", handler);
-    return () => document.removeEventListener("dbx-plugin-env", handler);
+    window.addEventListener("dbx-plugin-env", handler);
+    return () => {
+      document.removeEventListener("dbx-plugin-env", handler);
+      window.removeEventListener("dbx-plugin-env", handler);
+    };
   }
 
   function onProgress(listener) {
@@ -158,6 +164,100 @@
     return invoke("store/setDir", { dir }, 10000);
   }
 
+  function fileTransferApi() {
+    return plugin && plugin.fileTransfer ? plugin.fileTransfer : null;
+  }
+
+  function bytesToBase64(bytes) {
+    let binary = "";
+    const step = 0x8000;
+    for (let index = 0; index < bytes.length; index += step) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(index, index + step));
+    }
+    return btoa(binary);
+  }
+
+  function base64ToText(parts) {
+    const binary = parts.map((part) => atob(part)).join("");
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return new TextDecoder().decode(bytes);
+  }
+
+  /* Desktop DBX exposes a native save dialog on fileTransfer. Web hosts leave
+     that namespace undefined; fall back to the sidecar Downloads folder, which
+     is the same path http/body/save already uses. */
+  async function saveTextFile(name, text) {
+    const transfer = fileTransferApi();
+    if (transfer && typeof transfer.beginSave === "function" && typeof transfer.write === "function" && typeof transfer.finish === "function") {
+      const bytes = new TextEncoder().encode(text);
+      const target = await transfer.beginSave({ name, contentType: "application/json", size: bytes.length });
+      if (!target || !target.handleId) return { cancelled: true };
+      try {
+        await transfer.write(target.handleId, 0, bytes);
+      } catch (error) {
+        await transfer.write(target.handleId, 0, bytesToBase64(bytes));
+      }
+      await transfer.finish(target.handleId);
+      return { path: name, via: "dialog" };
+    }
+    if (backendReady) {
+      const saved = await invoke("file/writeText", { fileName: name, content: text }, 15000);
+      return { path: (saved && saved.path) || name, via: "sidecar" };
+    }
+    const blob = new Blob([text], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = name;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+    return { path: name, via: "browser" };
+  }
+
+  async function pickTextFile() {
+    const transfer = fileTransferApi();
+    if (transfer && typeof transfer.pick === "function" && typeof transfer.read === "function") {
+      const picked = await transfer.pick({ multiple: false });
+      const files = picked && picked.files;
+      if (!files || !files.length) return null;
+      const file = files[0];
+      const parts = [];
+      let offset = 0;
+      for (;;) {
+        const chunk = await transfer.read(file.handleId, offset, 256 * 1024);
+        if (chunk && chunk.dataBase64) parts.push(chunk.dataBase64);
+        const length = (chunk && chunk.length) || 0;
+        offset += length;
+        if (!chunk || chunk.eof || !length) break;
+        if (offset > 2 * 1024 * 1024) {
+          if (typeof transfer.cancel === "function") await transfer.cancel(file.handleId);
+          throw new Error("too-large");
+        }
+      }
+      if (typeof transfer.cancel === "function") {
+        try { await transfer.cancel(file.handleId); } catch (error) { /* handle already closed */ }
+      }
+      return { name: file.name || "environments.json", text: base64ToText(parts) };
+    }
+    return new Promise((resolve) => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".json,application/json";
+      input.addEventListener("change", () => {
+        const file = input.files && input.files[0];
+        if (!file) { resolve(null); return; }
+        const reader = new FileReader();
+        reader.onload = () => resolve({ name: file.name, text: String(reader.result || "") });
+        reader.onerror = () => resolve(null);
+        reader.readAsText(file);
+      });
+      input.click();
+    });
+  }
+
   async function copy(text) {
     if (plugin && plugin.copy) {
       try {
@@ -192,6 +292,8 @@
     loadStore,
     saveStore,
     setStoreDir,
+    saveTextFile,
+    pickTextFile,
     copy,
     MAX_INVOKE_TIMEOUT
   };

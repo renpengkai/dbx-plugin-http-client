@@ -177,6 +177,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .hc-icon-btn:hover { background: var(--hc-hover); color: var(--hc-fg); }
 .hc-icon-btn.is-on { color: var(--hc-warning); }
+.hc-icon-btn.is-saved { color: var(--hc-success); }
+.hc-save-split { display: inline-flex; align-items: stretch; flex: 0 0 auto; }
+.hc-save-caret { width: 18px; font-size: 10px; padding: 0; }
 
 /* ------------------------------------------------------------------ body --- */
 
@@ -195,6 +198,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .hc-side-tab.is-active { color: var(--hc-fg); border-bottom-color: var(--hc-primary); font-weight: 600; }
 
+.hc-side-search { padding: 6px 8px 0; }
+.hc-side-search .hc-input { width: 100%; font-size: 12px; padding: 4px 8px; }
 .hc-side-actions { display: flex; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--hc-border); flex-wrap: wrap; }
 .hc-side-body { flex: 1; overflow: auto; padding: 6px; }
 
@@ -216,7 +221,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .hc-tab-label { overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
 .hc-tab-close { border: 0; background: transparent; cursor: pointer; color: inherit; opacity: .6; padding: 0 2px; }
 .hc-tab-close:hover { opacity: 1; color: var(--hc-destructive); }
-.hc-tab-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--hc-warning); flex: 0 0 auto; }
+.hc-tab-dot, .hc-dirty-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--hc-warning); flex: 0 0 auto; }
 .hc-context-item:disabled { opacity: .45; cursor: default; }
 
 /* ------------------------------------------------------------- request ---- */
@@ -341,38 +346,46 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .hc-list-item:hover { background: var(--hc-hover); }
 .hc-list-item.is-active { background: var(--hc-active); border-color: color-mix(in srgb, var(--hc-primary) 40%, transparent); }
-.hc-list-item .hc-grow { min-width: 0; }
-.hc-list-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hc-list-item .hc-grow,
+.hc-side-group-head .hc-grow { min-width: 0; }
+.hc-list-title { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hc-list-sub { color: var(--hc-muted-fg); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hc-list-actions { display: flex; gap: 2px; opacity: 0; }
-.hc-list-item:hover .hc-list-actions { opacity: 1; }
-.hc-side-group { margin: 4px 0; }
-.hc-side-group-head { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: var(--hc-radius-sm); cursor: pointer; color: var(--hc-muted-fg); }
+.hc-search-hit { background: color-mix(in srgb, var(--hc-warning) 38%, transparent); color: inherit; border-radius: 2px; }
+.hc-side-group { margin: 2px 0; min-width: 0; }
+.hc-side-group-head { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: var(--hc-radius-sm); cursor: pointer; color: var(--hc-muted-fg); min-width: 0; }
 .hc-side-group-head:hover { background: var(--hc-hover); color: var(--hc-fg); }
-.hc-side-group-body { padding-left: 8px; }
-.hc-tree-folder { margin: 2px 0 2px 10px; }
+.hc-side-group-body { padding-left: 12px; min-width: 0; }
+.hc-tree-folder { margin: 1px 0; min-width: 0; }
 .hc-chevron { width: 12px; flex: 0 0 auto; font-size: 10px; color: var(--hc-muted-fg); text-align: center; }
-.hc-side-group-head .hc-icon-btn { width: 22px; height: 22px; }
-/* Collection, folder, and request actions stay visible. The head used to
-   share `.hc-list-actions { opacity: 0 }` without a matching hover rule, which
-   hid rename / export / delete entirely. */
-.hc-side-group-head .hc-list-actions { opacity: 1; }
-.hc-list-item .hc-list-actions,
-.hc-list-item:focus-within .hc-list-actions { opacity: 1; }
-.hc-mini-btn {
-  height: 22px; padding: 0 6px; border: 1px solid var(--hc-border); border-radius: var(--hc-radius-sm);
-  background: var(--hc-bg); color: var(--hc-fg); font-size: 11px; cursor: pointer; white-space: nowrap;
+.hc-side-group-head .hc-badge,
+.hc-list-item .hc-tag,
+.hc-dirty-dot { flex: 0 0 auto; }
+/* Row actions stay out of the layout until hover, selection, or an open menu,
+   so collection and request names keep the full default sidebar width. */
+.hc-list-actions {
+  display: flex; flex: 0 0 auto; width: 0; min-width: 0; overflow: hidden; opacity: 0; pointer-events: none;
 }
-.hc-mini-btn:hover { background: var(--hc-hover); border-color: color-mix(in srgb, var(--hc-primary) 35%, var(--hc-border)); }
+.hc-list-item:hover .hc-list-actions,
+.hc-list-item.is-active .hc-list-actions,
+.hc-list-item.is-menu-open .hc-list-actions,
+.hc-list-item:focus-within .hc-list-actions,
+.hc-side-group-head:hover .hc-list-actions,
+.hc-side-group-head.is-menu-open .hc-list-actions,
+.hc-side-group-head:focus-within .hc-list-actions {
+  width: 22px; min-width: 22px; opacity: 1; overflow: visible; pointer-events: auto;
+}
+.hc-more-btn { width: 22px; height: 22px; font-size: 16px; line-height: 1; letter-spacing: 0; }
+.hc-side-group-head .hc-icon-btn { width: 22px; height: 22px; }
 .hc-context-menu {
   position: fixed; z-index: 50; min-width: 148px; padding: 4px;
   background: var(--hc-card); color: var(--hc-card-fg); border: 1px solid var(--hc-border);
   border-radius: var(--hc-radius); box-shadow: 0 12px 32px rgba(0, 0, 0, .2);
 }
 .hc-context-item {
-  display: block; width: 100%; text-align: left; border: 0; background: transparent;
-  padding: 6px 8px; border-radius: var(--hc-radius-sm); cursor: pointer; color: inherit;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; text-align: left; border: 0; background: transparent;
+  padding: 6px 8px; border-radius: var(--hc-radius-sm); cursor: pointer; color: inherit; white-space: nowrap;
 }
+.hc-context-hint { color: var(--hc-muted-fg); font-size: 11px; }
 .hc-context-item:hover { background: var(--hc-hover); }
 .hc-context-item.is-danger { color: var(--hc-destructive); }
 .hc-file-card {

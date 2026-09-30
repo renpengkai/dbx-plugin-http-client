@@ -1,6 +1,11 @@
 package main
 
-import "testing"
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestSuggestDownloadName(t *testing.T) {
 	cases := []struct {
@@ -155,5 +160,36 @@ func TestSanitizeFileNameReserved(t *testing.T) {
 	}
 	if got := sanitizeFileName(".."); got != "" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+func TestWriteTextFile(t *testing.T) {
+	dir := t.TempDir()
+	raw, err := json.Marshal(map[string]string{
+		"directory": dir,
+		"fileName":  "environments.json",
+		"content":   "{\"version\":1}\n",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, pluginErr := (&plugin{}).handleWriteText(raw)
+	if pluginErr != nil {
+		t.Fatal(pluginErr.Message)
+	}
+	saved, ok := result.(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected result %#v", result)
+	}
+	path, _ := saved["path"].(string)
+	if filepath.Base(path) != "environments.json" {
+		t.Fatalf("path %q", path)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != "{\"version\":1}\n" {
+		t.Fatalf("body %q", body)
 	}
 }

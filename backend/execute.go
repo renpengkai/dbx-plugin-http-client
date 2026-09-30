@@ -577,23 +577,62 @@ func (p *plugin) handleSaveBody(params json.RawMessage) (any, *dbxpluginsdk.Plug
 	} else {
 		name = withExtension(name, entry.contentType, false)
 	}
-	directory := strings.TrimSpace(payload.Directory)
-	if directory == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil, dbxpluginsdk.NewError(-32000, "Cannot locate user home directory: "+err.Error())
-		}
-		directory = filepath.Join(home, "Downloads")
-	}
-	if !filepath.IsAbs(directory) {
-		return nil, dbxpluginsdk.NewError(-32602, "Save directory must be an absolute path")
-	}
-	if err := os.MkdirAll(directory, 0o755); err != nil {
-		return nil, dbxpluginsdk.NewError(-32000, "Failed to create directory: "+err.Error())
+	directory, pluginErr := resolveSaveDirectory(payload.Directory)
+	if pluginErr != nil {
+		return nil, pluginErr
 	}
 	target := uniquePath(directory, name)
 	if err := os.WriteFile(target, entry.payload, 0o644); err != nil {
 		return nil, dbxpluginsdk.NewError(-32000, "Failed to write file: "+err.Error())
 	}
 	return map[string]any{"path": target, "bytes": len(entry.payload)}, nil
+}
+
+// handleWriteText saves a small UTF-8 document (environment export) the same
+// way response bodies are saved: the desktop host's save dialog is preferred
+// by the UI, and this RPC is the fallback that lands the file in ~/Downloads.
+func (p *plugin) handleWriteText(params json.RawMessage) (any, *dbxpluginsdk.PluginError) {
+	var payload struct {
+		Directory string `json:"directory"`
+		FileName  string `json:"fileName"`
+		Content   string `json:"content"`
+	}
+	if pluginErr := decodeParams(params, &payload); pluginErr != nil {
+		return nil, pluginErr
+	}
+	if len(payload.Content) > 2<<20 {
+		return nil, dbxpluginsdk.NewError(-32602, "File is larger than 2 MiB")
+	}
+	name := sanitizeFileName(payload.FileName)
+	if name == "" {
+		name = "export.json"
+	}
+	directory, pluginErr := resolveSaveDirectory(payload.Directory)
+	if pluginErr != nil {
+		return nil, pluginErr
+	}
+	target := uniquePath(directory, name)
+	body := []byte(payload.Content)
+	if err := os.WriteFile(target, body, 0o644); err != nil {
+		return nil, dbxpluginsdk.NewError(-32000, "Failed to write file: "+err.Error())
+	}
+	return map[string]any{"path": target, "bytes": len(body)}, nil
+}
+
+func resolveSaveDirectory(directory string) (string, *dbxpluginsdk.PluginError) {
+	directory = strings.TrimSpace(directory)
+	if directory == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", dbxpluginsdk.NewError(-32000, "Cannot locate user home directory: "+err.Error())
+		}
+		directory = filepath.Join(home, "Downloads")
+	}
+	if !filepath.IsAbs(directory) {
+		return "", dbxpluginsdk.NewError(-32602, "Save directory must be an absolute path")
+	}
+	if err := os.MkdirAll(directory, 0o755); err != nil {
+		return "", dbxpluginsdk.NewError(-32000, "Failed to create directory: "+err.Error())
+	}
+	return directory, nil
 }
