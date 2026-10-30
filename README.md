@@ -7,7 +7,7 @@
 - 贡献点：`workbench`（`com.jettech.httpclient.workbench`）、`connection-provider`（`com.jettech.httpclient.connection`）、Dock 快捷命令（`presentation: panel`）+ `appToolbar` / 命令面板
 - 入口：`ui/index.html` + `bin/dbx-plugin-http-client`（Go Sidecar）
 - 权限：`host.events`、`host.workbench`
-- 版本：`0.2.0`（需 DBX `>=0.6.43`）
+- 版本：`0.2.1`（需 DBX `>=0.6.43`）
 
 ---
 

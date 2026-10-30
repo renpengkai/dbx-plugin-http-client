@@ -3,7 +3,7 @@
   "manifest_version": 1,
   "id": "com.jettech.httpclient",
   "name": "HTTP Client",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "jettech",
   "description": "A Postman-style HTTP/gRPC workbench: compose requests, import OpenAPI, sync via WebDAV, and inspect responses.",
   "icon": "assets/plugin.svg",
@@ -89,7 +89,7 @@
     },
     {
       "type": "command",
-      "id": "com.jettech.httpclient.openTab",
+      "id": "com.jettech.httpclient.open-tab",
       "label": "HTTP Client (Tab)",
       "description": "Open the HTTP Client as a workbench tab.",
       "icon": "assets/plugin.svg",
@@ -106,20 +106,20 @@
         {
           "location": "appToolbar",
           "command": "com.jettech.httpclient.open",
-          "group": "plugins",
+          "group": "primary",
           "order": 20,
           "default_visible": true
         },
         {
           "location": "commandPalette",
           "command": "com.jettech.httpclient.open",
-          "group": "plugins",
+          "group": "primary",
           "order": 20
         },
         {
           "location": "commandPalette",
-          "command": "com.jettech.httpclient.openTab",
-          "group": "plugins",
+          "command": "com.jettech.httpclient.open-tab",
+          "group": "secondary",
           "order": 21
         }
       ]
@@ -153,7 +153,7 @@
           "label": "HTTP 客户端",
           "description": "在底部 Dock 面板中打开 HTTP 客户端。"
         },
-        "com.jettech.httpclient.openTab": {
+        "com.jettech.httpclient.open-tab": {
           "label": "HTTP 客户端（标签页）",
           "description": "以工作台标签页打开 HTTP 客户端。"
         }

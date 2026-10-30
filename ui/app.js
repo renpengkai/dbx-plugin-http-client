@@ -8,7 +8,7 @@
   const t = (key, params) => HC.i18n.t(key, params);
   const el = util.el;
 
-  const VERSION = "0.2.0";
+  const VERSION = "0.2.1";
 
   function surfaceMode() {
     const context = bridge.context || {};

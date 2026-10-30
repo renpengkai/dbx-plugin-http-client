@@ -19,7 +19,7 @@
   "source": "https://github.com/renpengkai/dbx-plugin-http-client",
   "homepage": "https://github.com/renpengkai/dbx-plugin-http-client",
   "license": "Apache-2.0",
-  "releaseNotes": "0.2.0：支持 gRPC（Server Reflection + 一元调用）、OpenAPI/Swagger 导入、WebDAV 同步集合/环境、适配 DBX Dock 快捷入口（appToolbar + panel）。保留 0.1.8：侧栏「⋯」菜单/搜索/环境导入导出、Ctrl+S 原地保存与另存为、连接存储目录与英语默认界面。",
+  "releaseNotes": "0.2.1：修正 Manifest 兼容性（命令 ID 改为全小写 open-tab；菜单 group 改用 primary/secondary）。0.2.0：gRPC、OpenAPI/Swagger 导入、WebDAV 同步、Dock 快捷入口。",
   "localizations": {
     "zh-CN": {
       "name": "HTTP 客户端",
