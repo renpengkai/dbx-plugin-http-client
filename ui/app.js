@@ -8,7 +8,22 @@
   const t = (key, params) => HC.i18n.t(key, params);
   const el = util.el;
 
-  const VERSION = "0.1.8";
+  const VERSION = "0.2.0";
+
+  function surfaceMode() {
+    const context = bridge.context || {};
+    return context.surface || "tab";
+  }
+
+  function applySurface() {
+    const surface = surfaceMode();
+    document.documentElement.dataset.surface = surface;
+    if (surface === "dock" && !store.state.settings._dockApplied) {
+      store.state.settings.sidebarCollapsed = true;
+      store.state.settings.requestPercent = 55;
+      store.state.settings._dockApplied = true;
+    }
+  }
 
   function staticLabels() {
     document.documentElement.lang = HC.i18n.locale;
@@ -16,9 +31,12 @@
     util.$("#sidebar-splitter").title = t("side.resize");
     util.$("#pane-splitter").title = t("pane.resize");
     util.$("#method-select").setAttribute("aria-label", t("request.method"));
+    const protocolSelect = util.$("#protocol-select");
+    if (protocolSelect) protocolSelect.setAttribute("aria-label", t("request.protocol"));
     util.$("#brand-name").textContent = t("brand");
     util.$("#btn-toggle-sidebar").title = t("side.toggle");
     util.$("#label-environment").textContent = t("label.environment");
+    util.$("#btn-import-swagger").textContent = t("action.importSwagger");
     util.$("#btn-import-curl").textContent = t("action.importCurl");
     util.$("#btn-settings").textContent = t("action.settings");
     util.$("#btn-send").textContent = t("action.send");
@@ -26,6 +44,7 @@
     util.$("#btn-copy-curl").title = t("action.copyCurl");
     const saveMenu = util.$("#btn-save-menu");
     if (saveMenu) saveMenu.title = `${t("action.saveAs")} (${modLabel()}+Shift+S)`;
+    util.$("#btn-grpc-reflect").textContent = t("action.grpcReflect");
     util.$$(".hc-side-tab").forEach((button) => {
       button.textContent = t(`side.${button.dataset.sideView}`);
     });
@@ -38,7 +57,10 @@
     store.state.tabs.forEach((tab) => {
       const active = tab.id === store.state.activeTabId;
       const node = el("div", { class: `hc-tab${active ? " is-active" : ""}`, title: store.requestTitle(tab) }, [
-        el("span", { class: `hc-tag m-${tab.method}`, text: tab.method }),
+        el("span", {
+          class: `hc-tag m-${(tab.protocol || "http") === "grpc" ? "GRPC" : tab.method}`,
+          text: (tab.protocol || "http") === "grpc" ? "gRPC" : tab.method
+        }),
         el("span", { class: "hc-tab-label", text: store.requestTitle(tab) }),
         tab.dirty ? el("span", { class: "hc-tab-dot", title: t("tab.unsaved") }) : null,
         el("button", {
@@ -233,7 +255,20 @@
       util.toast(t("err.backendHint"), "error");
       return;
     }
-    if (!String(tab.url || "").trim()) {
+    const isGrpc = (tab.protocol || "http") === "grpc";
+    if (isGrpc) {
+      if (!tab.grpc) tab.grpc = { target: "", method: "", plaintext: true, authority: "" };
+      tab.grpc.target = tab.url || tab.grpc.target;
+      if (!String(tab.grpc.target || "").trim()) {
+        util.toast(t("toast.grpcTargetRequired"), "error");
+        util.$("#url-input").focus();
+        return;
+      }
+      if (!String(tab.grpc.method || "").trim()) {
+        util.toast(t("toast.grpcMethodRequired"), "error");
+        return;
+      }
+    } else if (!String(tab.url || "").trim()) {
       util.toast(t("toast.urlRequired"), "error");
       util.$("#url-input").focus();
       return;
@@ -251,7 +286,7 @@
     const started = performance.now();
     try {
       const spec = store.buildSpec(tab, requestId);
-      const result = await bridge.send(spec);
+      const result = isGrpc ? await bridge.grpcSend(spec) : await bridge.send(spec);
       tab.response = result;
       store.pushHistory(tab, result);
     } catch (error) {
@@ -435,7 +470,34 @@
     return wrap;
   }
 
+  function webdavConfigFromForm(fields) {
+    return {
+      endpoint: fields.endpoint.value.trim(),
+      username: fields.username.value.trim(),
+      password: fields.password.value,
+      remotePath: fields.remotePath.value.trim() || "DBX/http-client/store.json",
+      userAgent: fields.userAgent.value.trim()
+    };
+  }
+
   function openSettings() {
+    if (!store.state.settings.webdav) {
+      store.state.settings.webdav = {
+        endpoint: "", username: "", password: "",
+        remotePath: "DBX/http-client/store.json", userAgent: "", autoSync: false
+      };
+    }
+    const webdav = store.state.settings.webdav;
+    const fields = {
+      endpoint: el("input", { class: "hc-input", type: "url", value: webdav.endpoint || "", placeholder: "https://dav.example.com/remote.php/dav/files/user" }),
+      username: el("input", { class: "hc-input", type: "text", value: webdav.username || "" }),
+      password: el("input", { class: "hc-input", type: "password", value: webdav.password || "" }),
+      remotePath: el("input", { class: "hc-input", type: "text", value: webdav.remotePath || "DBX/http-client/store.json" }),
+      userAgent: el("input", { class: "hc-input", type: "text", value: webdav.userAgent || "", placeholder: "Zotero/10.0.0" }),
+      autoSync: el("input", { type: "checkbox" })
+    };
+    fields.autoSync.checked = !!webdav.autoSync;
+
     util.openModal({
       title: t("dialog.settingsTitle"),
       render: (body) => {
@@ -448,10 +510,91 @@
         row(t("settings.storage"), store.state.memoryOnly ? t("dialog.memoryOnly") : (store.state.storePath || "—"));
         row(t("settings.language"), HC.i18n.locale);
         row(t("settings.version"), VERSION);
+        row(t("settings.surface"), surfaceMode());
         row(t("misc.dynamicVars"), t("misc.dynamicHint"));
         body.append(grid);
         body.append(renderStorageDirField());
         body.append(el("div", { class: "hc-hint", text: t("settings.dataHint") }));
+
+        body.append(el("h3", { class: "hc-subtitle", text: t("settings.webdavTitle") }));
+        body.append(el("div", { class: "hc-hint", text: t("settings.webdavHint") }));
+        const syncGrid = el("div", { class: "hc-form-grid" });
+        const addField = (label, node) => {
+          syncGrid.append(el("span", { class: "hc-field-label", text: label }));
+          syncGrid.append(node);
+        };
+        addField(t("settings.webdavEndpoint"), fields.endpoint);
+        addField(t("settings.webdavUsername"), fields.username);
+        addField(t("settings.webdavPassword"), fields.password);
+        addField(t("settings.webdavRemotePath"), fields.remotePath);
+        addField(t("settings.webdavUserAgent"), fields.userAgent);
+        addField(t("settings.webdavAutoSync"), el("label", { class: "hc-checkbox" }, [fields.autoSync, el("span", { text: t("settings.webdavAutoSyncHint") })]));
+        body.append(syncGrid);
+
+        const syncActions = el("div", { class: "hc-body-toolbar" }, [
+          el("button", {
+            class: "hc-btn hc-btn-sm hc-btn-ghost", type: "button", text: t("settings.webdavTest"),
+            on: {
+              click: async () => {
+                if (!bridge.backendReady) { util.toast(t("err.backendHint"), "error"); return; }
+                try {
+                  const result = await bridge.webdavTest(webdavConfigFromForm(fields));
+                  util.toast(t("toast.webdavOk", { status: result.status }), "success");
+                } catch (error) {
+                  util.toast(t("toast.webdavFailed", { message: (error && error.message) || String(error) }), "error");
+                }
+              }
+            }
+          }),
+          el("button", {
+            class: "hc-btn hc-btn-sm", type: "button", text: t("settings.webdavUpload"),
+            on: {
+              click: async () => {
+                if (!bridge.backendReady) { util.toast(t("err.backendHint"), "error"); return; }
+                try {
+                  const config = webdavConfigFromForm(fields);
+                  Object.assign(store.state.settings.webdav, config, { autoSync: fields.autoSync.checked });
+                  await store.persist();
+                  const result = await bridge.webdavUpload(config, store.serializable());
+                  util.toast(t("toast.webdavUploaded", { bytes: result.bytes }), "success");
+                } catch (error) {
+                  util.toast(t("toast.webdavFailed", { message: (error && error.message) || String(error) }), "error");
+                }
+              }
+            }
+          }),
+          el("button", {
+            class: "hc-btn hc-btn-sm", type: "button", text: t("settings.webdavDownload"),
+            on: {
+              click: async () => {
+                if (!bridge.backendReady) { util.toast(t("err.backendHint"), "error"); return; }
+                if (!await util.confirmDialog({ title: t("settings.webdavDownload"), message: t("settings.webdavDownloadConfirm") })) return;
+                try {
+                  const config = webdavConfigFromForm(fields);
+                  const result = await bridge.webdavDownload(config);
+                  store.state.tabs = [];
+                  store.state.collections = [];
+                  store.state.environments = [];
+                  store.state.history = [];
+                  store.state.activeEnvironmentId = "";
+                  store.hydrate(result.store);
+                  if (!store.state.tabs.length) store.createTab();
+                  Object.assign(store.state.settings.webdav, config, { autoSync: fields.autoSync.checked });
+                  await store.persist();
+                  store.emit("loaded");
+                  store.emit("sidebar");
+                  store.emit("environments");
+                  renderAll();
+                  util.toast(t("toast.webdavDownloaded", { bytes: result.bytes }), "success");
+                } catch (error) {
+                  util.toast(t("toast.webdavFailed", { message: (error && error.message) || String(error) }), "error");
+                }
+              }
+            }
+          })
+        ]);
+        body.append(syncActions);
+
         const actions = el("div", { class: "hc-body-toolbar" }, [
           el("button", {
             class: "hc-btn hc-btn-sm hc-btn-ghost", type: "button", text: t("settings.exportAll"),
@@ -483,8 +626,120 @@
         ]);
         body.append(actions);
       },
-      actions: [{ label: t("action.close"), kind: "primary", onClick: (api) => api.close() }]
+      actions: [
+        {
+          label: t("action.save2"), kind: "primary",
+          onClick: (api) => {
+            Object.assign(store.state.settings.webdav, webdavConfigFromForm(fields), { autoSync: fields.autoSync.checked });
+            store.persist();
+            util.toast(t("toast.saved"), "success");
+            api.close();
+          }
+        },
+        { label: t("action.close"), onClick: (api) => api.close() }
+      ]
     });
+  }
+
+  function openSwaggerImport() {
+    const textarea = el("textarea", {
+      class: "hc-textarea", spellcheck: "false",
+      placeholder: '{\n  "openapi": "3.0.0",\n  "info": { "title": "Demo" },\n  "paths": {}\n}'
+    });
+    const baseInput = el("input", { class: "hc-input", type: "text", placeholder: "https://api.example.com" });
+    util.openModal({
+      title: t("dialog.importSwaggerTitle"),
+      render: (body) => {
+        body.append(el("div", { class: "hc-hint", text: t("dialog.importSwaggerHint") }));
+        body.append(el("label", { class: "hc-field" }, [
+          el("span", { class: "hc-field-label", text: t("dialog.baseUrl") }),
+          baseInput
+        ]));
+        body.append(textarea);
+      },
+      actions: [
+        { label: t("action.cancel2"), onClick: (api) => api.close() },
+        {
+          label: t("action.import"), kind: "primary",
+          onClick: async (api) => {
+            const text = textarea.value.trim();
+            if (!text) return;
+            try {
+              const result = await HC.swagger.importDocument(text, { baseUrl: baseInput.value.trim() });
+              const collection = store.createCollection((result.collection && result.collection.name) || "OpenAPI");
+              (result.collection.requests || []).forEach((request) => {
+                collection.requests.push(Object.assign({ id: util.uid("saved"), protocol: "http" }, request));
+              });
+              store.persist();
+              store.emit("sidebar");
+              util.toast(t("toast.imported", { count: result.count || collection.requests.length }), "success");
+              api.close();
+            } catch (error) {
+              util.toast(t("toast.importFailed", { message: (error && error.message) || String(error) }), "error");
+            }
+          }
+        }
+      ]
+    });
+  }
+
+  async function reflectGrpc() {
+    const tab = store.activeTab();
+    if (!tab || (tab.protocol || "http") !== "grpc") return;
+    if (!bridge.backendReady) { util.toast(t("err.backendHint"), "error"); return; }
+    if (!tab.grpc) tab.grpc = { target: "", method: "", plaintext: true, authority: "" };
+    tab.grpc.target = tab.url || tab.grpc.target;
+    if (!String(tab.grpc.target || "").trim()) {
+      util.toast(t("toast.grpcTargetRequired"), "error");
+      return;
+    }
+    try {
+      const result = await bridge.grpcReflect({
+        target: store.resolve(tab.grpc.target),
+        plaintext: tab.grpc.plaintext !== false,
+        verifyTls: tab.options.verifyTls !== false,
+        authority: store.resolve(tab.grpc.authority || ""),
+        headers: (tab.headers || []).filter((row) => row.enabled !== false && row.key).map((row) => ({
+          key: store.resolve(row.key), value: store.resolve(row.value), enabled: true
+        })),
+        timeoutMs: Number(tab.options.timeoutMs) || 30000
+      });
+      const methods = [];
+      (result.services || []).forEach((service) => {
+        (service.methods || []).forEach((method) => {
+          methods.push(method.fullName || `${service.name}/${method.name}`);
+        });
+      });
+      if (!methods.length) {
+        util.toast(t("toast.grpcNoMethods"), "error");
+        return;
+      }
+      const select = el("select", { class: "hc-select" });
+      methods.forEach((name) => select.append(el("option", { value: name, text: name })));
+      if (tab.grpc.method) select.value = tab.grpc.method;
+      util.openModal({
+        title: t("dialog.grpcReflectTitle"),
+        render: (body) => {
+          body.append(el("div", { class: "hc-hint", text: t("dialog.grpcReflectHint", { count: methods.length }) }));
+          body.append(select);
+        },
+        actions: [
+          { label: t("action.cancel2"), onClick: (api) => api.close() },
+          {
+            label: t("action.confirm"), kind: "primary",
+            onClick: (api) => {
+              tab.grpc.method = select.value;
+              tab.section = "grpc";
+              store.markDirty(tab);
+              HC.viewRequest.render();
+              api.close();
+            }
+          }
+        ]
+      });
+    } catch (error) {
+      util.toast(t("toast.grpcReflectFailed", { message: (error && error.message) || String(error) }), "error");
+    }
   }
 
   /* ------------------------------------------------------------- splitters */
@@ -536,11 +791,33 @@
     util.$("#btn-save-menu").addEventListener("click", (event) => openSaveMenu(event));
     util.$("#btn-copy-curl").addEventListener("click", copyCurl);
     util.$("#btn-import-curl").addEventListener("click", openCurlImport);
+    util.$("#btn-import-swagger").addEventListener("click", openSwaggerImport);
+    util.$("#btn-grpc-reflect").addEventListener("click", reflectGrpc);
     util.$("#btn-settings").addEventListener("click", openSettings);
     util.$("#btn-toggle-sidebar").addEventListener("click", () => {
       store.state.settings.sidebarCollapsed = !store.state.settings.sidebarCollapsed;
       applyLayout();
       store.persist();
+    });
+
+    const protocolSelect = util.$("#protocol-select");
+    protocolSelect.addEventListener("change", () => {
+      const tab = store.activeTab();
+      tab.protocol = protocolSelect.value;
+      if (tab.protocol === "grpc") {
+        if (!tab.grpc) tab.grpc = { target: "", method: "", plaintext: true, authority: "" };
+        tab.grpc.target = tab.url || tab.grpc.target;
+        tab.body.mode = "raw";
+        tab.body.contentType = "application/json";
+        if (!tab.body.raw) tab.body.raw = "{\n}\n";
+        tab.section = "grpc";
+      } else if (tab.section === "grpc") {
+        tab.section = "params";
+      }
+      store.markDirty(tab);
+      renderTabs();
+      HC.viewRequest.render();
+      renderToolbarState();
     });
 
     const methodSelect = util.$("#method-select");
@@ -557,14 +834,23 @@
     urlInput.addEventListener("input", () => {
       const tab = store.activeTab();
       tab.url = urlInput.value;
+      if ((tab.protocol || "http") === "grpc") {
+        if (!tab.grpc) tab.grpc = { target: "", method: "", plaintext: true, authority: "" };
+        tab.grpc.target = urlInput.value;
+      }
       store.markDirty(tab);
       HC.viewRequest.updateUrlFlag(tab);
     });
     urlInput.addEventListener("change", () => {
       const tab = store.activeTab();
       tab.url = urlInput.value;
+      if ((tab.protocol || "http") === "grpc") {
+        if (!tab.grpc) tab.grpc = { target: "", method: "", plaintext: true, authority: "" };
+        tab.grpc.target = urlInput.value;
+      } else {
+        HC.viewRequest.syncParamsFromUrl(tab);
+      }
       store.markDirty(tab);
-      HC.viewRequest.syncParamsFromUrl(tab);
       HC.viewRequest.render();
     });
     urlInput.addEventListener("keydown", (event) => {
@@ -634,6 +920,22 @@
     HC.viewResponse.render();
   }
 
+  async function maybeAutoSync() {
+    const webdav = store.state.settings.webdav;
+    if (!webdav || !webdav.autoSync || !webdav.endpoint || !bridge.backendReady) return;
+    try {
+      await bridge.webdavUpload({
+        endpoint: webdav.endpoint,
+        username: webdav.username,
+        password: webdav.password,
+        remotePath: webdav.remotePath,
+        userAgent: webdav.userAgent
+      }, store.serializable());
+    } catch (error) {
+      /* auto-sync is best-effort; settings stay local */
+    }
+  }
+
   async function boot() {
     HC.i18n.setLocale(bridge.locale);
     staticLabels();
@@ -648,10 +950,14 @@
     ]);
     HC.i18n.setLocale(bridge.locale);
     staticLabels();
+    applySurface();
     await store.init();
+    applySurface();
+    applyLayout();
     renderAll();
     if (settled) {
       if (!bridge.backendReady) util.toast(t("err.backendHint"), "error");
+      else maybeAutoSync();
       return;
     }
     // The handshake was still in flight when the guard fired. Refresh the toolbar
@@ -659,8 +965,12 @@
     bridge.ready.then(() => {
       HC.i18n.setLocale(bridge.locale);
       staticLabels();
+      applySurface();
+      applyLayout();
       renderAll();
+      renderToolbarState();
       if (!bridge.backendReady) util.toast(t("err.backendHint"), "error");
+      else maybeAutoSync();
     });
   }
 

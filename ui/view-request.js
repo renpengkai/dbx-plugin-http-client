@@ -15,6 +15,30 @@
     { id: "options", label: "section.options" }
   ];
 
+  function isGrpc(tab) {
+    return (tab.protocol || "http") === "grpc";
+  }
+
+  function syncProtocolChrome(tab) {
+    const protocolSelect = util.$("#protocol-select");
+    const methodSelect = util.$("#method-select");
+    const urlInput = util.$("#url-input");
+    const reflectBtn = util.$("#btn-grpc-reflect");
+    const copyCurl = util.$("#btn-copy-curl");
+    if (protocolSelect) protocolSelect.value = tab.protocol || "http";
+    const grpc = isGrpc(tab);
+    methodSelect.hidden = grpc;
+    if (reflectBtn) reflectBtn.hidden = !grpc;
+    if (copyCurl) copyCurl.hidden = grpc;
+    if (grpc) {
+      urlInput.placeholder = t("grpc.targetPlaceholder");
+      if (!tab.grpc) tab.grpc = { target: "", method: "", plaintext: true, authority: "" };
+      if (!tab.url && tab.grpc.target) tab.url = tab.grpc.target;
+    } else {
+      urlInput.placeholder = "https://api.example.com/users";
+    }
+  }
+
   const BODY_MODES = [
     { id: "none", label: "body.none" },
     { id: "raw", label: "body.raw" },
@@ -98,6 +122,7 @@
     currentTab = tab;
     const methodSelect = util.$("#method-select");
     const urlInput = util.$("#url-input");
+    syncProtocolChrome(tab);
     methodSelect.value = tab.method;
     if (urlInput.value !== tab.url) urlInput.value = tab.url || "";
     updateUrlFlag(tab);
@@ -115,9 +140,25 @@
     return (rows || []).filter((row) => row && row.enabled !== false && row.key).length;
   }
 
+  function visibleSections(tab) {
+    if (isGrpc(tab)) {
+      return [
+        { id: "grpc", label: "section.grpc" },
+        { id: "headers", label: "section.metadata" },
+        { id: "body", label: "section.message" },
+        { id: "options", label: "section.options" }
+      ];
+    }
+    return SECTIONS;
+  }
+
   function renderSections(tab) {
     const host = util.clear(util.$("#request-sections"));
-    SECTIONS.forEach((section) => {
+    const sections = visibleSections(tab);
+    if (!sections.some((section) => section.id === tab.section)) {
+      tab.section = sections[0].id;
+    }
+    sections.forEach((section) => {
       const button = el("button", {
         class: `hc-section${tab.section === section.id ? " is-active" : ""}`,
         type: "button",
@@ -135,6 +176,7 @@
       if (section.id === "headers") badge = countActive(tab.headers);
       if (section.id === "body" && tab.body.mode !== "none") badge = "•";
       if (section.id === "auth" && tab.auth.type !== "none") badge = "•";
+      if (section.id === "grpc" && tab.grpc && tab.grpc.method) badge = "•";
       if (section.id === "options") {
         const defaults = tab.options.verifyTls === false || tab.options.proxyMode !== "environment";
         badge = defaults ? "•" : null;
@@ -150,11 +192,82 @@
     const host = util.clear(util.$("#request-panels"));
     const panel = el("div", { class: "hc-panel" });
     host.append(panel);
-    if (tab.section === "params") renderParams(panel, tab);
+    if (tab.section === "grpc") renderGrpc(panel, tab);
+    else if (tab.section === "params") renderParams(panel, tab);
     else if (tab.section === "headers") renderHeaders(panel, tab);
-    else if (tab.section === "body") renderBody(panel, tab);
+    else if (tab.section === "body") {
+      if (isGrpc(tab)) renderGrpcMessage(panel, tab);
+      else renderBody(panel, tab);
+    }
     else if (tab.section === "auth") renderAuth(panel, tab);
     else renderOptions(panel, tab);
+  }
+
+  function renderGrpc(panel, tab) {
+    if (!tab.grpc) tab.grpc = { target: "", method: "", plaintext: true, authority: "" };
+    panel.append(el("div", { class: "hc-hint", text: t("grpc.hint") }));
+    const grid = el("div", { class: "hc-form-grid" });
+    const methodInput = el("input", {
+      class: "hc-input", type: "text", value: tab.grpc.method || "",
+      placeholder: "pkg.Service/Method"
+    });
+    methodInput.addEventListener("input", () => {
+      tab.grpc.method = methodInput.value;
+      markChanged(tab);
+    });
+    const authorityInput = el("input", {
+      class: "hc-input", type: "text", value: tab.grpc.authority || "",
+      placeholder: "optional.authority"
+    });
+    authorityInput.addEventListener("input", () => {
+      tab.grpc.authority = authorityInput.value;
+      markChanged(tab);
+    });
+    const plaintext = el("input", { type: "checkbox" });
+    plaintext.checked = tab.grpc.plaintext !== false;
+    plaintext.addEventListener("change", () => {
+      tab.grpc.plaintext = plaintext.checked;
+      markChanged(tab);
+    });
+    grid.append(el("span", { class: "hc-field-label", text: t("grpc.method") }));
+    grid.append(methodInput);
+    grid.append(el("span", { class: "hc-field-label", text: t("grpc.authority") }));
+    grid.append(authorityInput);
+    grid.append(el("span", { class: "hc-field-label", text: t("grpc.plaintext") }));
+    grid.append(el("label", { class: "hc-checkbox" }, [plaintext, el("span", { text: t("grpc.plaintextHint") })]));
+    panel.append(grid);
+  }
+
+  function renderGrpcMessage(panel, tab) {
+    tab.body.mode = "raw";
+    tab.body.contentType = "application/json";
+    panel.append(el("div", { class: "hc-hint", text: t("grpc.messageHint") }));
+    const toolbar = el("div", { class: "hc-body-toolbar" }, [
+      el("button", {
+        class: "hc-btn hc-btn-sm hc-btn-ghost", type: "button", text: t("action.format"),
+        on: {
+          click: () => {
+            try {
+              tab.body.raw = JSON.stringify(JSON.parse(tab.body.raw || "{}"), null, 2);
+              markChanged(tab);
+              render();
+            } catch (error) {
+              util.toast(t("toast.importFailed", { message: error.message }), "error");
+            }
+          }
+        }
+      })
+    ]);
+    panel.append(toolbar);
+    const area = el("textarea", {
+      class: "hc-textarea hc-code", spellcheck: "false",
+      value: tab.body.raw || "{\n}\n"
+    });
+    area.addEventListener("input", () => {
+      tab.body.raw = area.value;
+      markChanged(tab);
+    });
+    panel.append(area);
   }
 
   function markChanged(tab) {

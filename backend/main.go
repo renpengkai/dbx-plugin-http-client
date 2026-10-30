@@ -19,7 +19,7 @@ import (
 
 const (
 	pluginID      = "com.jettech.httpclient"
-	pluginVersion = "0.1.8"
+	pluginVersion = "0.2.0"
 )
 
 type plugin struct {
@@ -90,6 +90,18 @@ func (p *plugin) Handle(
 		return p.handleConnectionConnect(params)
 	case "connection/disconnect":
 		return p.handleConnectionDisconnect(params)
+	case "grpc/reflect":
+		return p.handleGRPCReflect(params)
+	case "grpc/send":
+		return p.handleGRPCSend(params, emitter)
+	case "openapi/import":
+		return p.handleOpenAPIImport(params)
+	case "sync/webdav/test":
+		return p.handleWebDAVTest(params)
+	case "sync/webdav/upload":
+		return p.handleWebDAVUpload(params)
+	case "sync/webdav/download":
+		return p.handleWebDAVDownload(params)
 	case "store/load":
 		return p.handleStoreLoad()
 	case "store/save":
@@ -120,7 +132,7 @@ func main() {
 	metadata := dbxpluginsdk.Metadata{
 		ID:           pluginID,
 		Version:      pluginVersion,
-		Capabilities: []string{"http", "events", "connections", "storage"},
+		Capabilities: []string{"http", "grpc", "openapi", "webdav", "events", "connections", "storage"},
 	}
 	server := dbxpluginsdk.NewServer(metadata, instance)
 	if err := server.Serve(); err != nil {

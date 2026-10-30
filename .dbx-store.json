@@ -1,17 +1,29 @@
 {
   "name": "HTTP Client",
-  "description": "A Postman-style HTTP workbench: compose requests, send them through a native sidecar, and inspect responses.",
+  "description": "A Postman-style HTTP/gRPC workbench: compose requests, import OpenAPI, sync via WebDAV, and inspect responses through a native sidecar.",
   "icon": "assets/plugin.svg",
-  "tags": ["http", "api", "debugging", "network"],
-  "permissions": ["host.events"],
+  "tags": [
+    "http",
+    "grpc",
+    "openapi",
+    "swagger",
+    "webdav",
+    "api",
+    "debugging",
+    "network"
+  ],
+  "permissions": [
+    "host.events",
+    "host.workbench"
+  ],
   "source": "https://github.com/renpengkai/dbx-plugin-http-client",
   "homepage": "https://github.com/renpengkai/dbx-plugin-http-client",
   "license": "Apache-2.0",
-  "releaseNotes": "0.1.8：侧栏集合树改为悬停「⋯」菜单，长名称省略并显示完整提示；已保存请求 Ctrl+S 原地保存不再弹窗，并提供另存为与未保存标记；侧栏可按名称、URL、方法搜索；环境支持 JSON 导入导出（含 Postman 环境文件，同名可覆盖或保留两者）。另含 0.1.7：默认界面语言改为英语，并在宿主握手完成后跟随 DBX 的语言设置。",
+  "releaseNotes": "0.2.0：支持 gRPC（Server Reflection + 一元调用）、OpenAPI/Swagger 导入、WebDAV 同步集合/环境、适配 DBX Dock 快捷入口（appToolbar + panel）。保留 0.1.8：侧栏「⋯」菜单/搜索/环境导入导出、Ctrl+S 原地保存与另存为、连接存储目录与英语默认界面。",
   "localizations": {
     "zh-CN": {
       "name": "HTTP 客户端",
-      "description": "类似 Postman 的 HTTP 接口调试工作台：构造请求、通过原生 Sidecar 发送并查看响应。"
+      "description": "类似 Postman 的 HTTP/gRPC 接口调试工作台：构造请求、导入 OpenAPI、经 WebDAV 同步，并通过原生 Sidecar 发送并查看响应。"
     }
   }
 }

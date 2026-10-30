@@ -19,7 +19,19 @@
     environments: [],
     history: [],
     activeEnvironmentId: "",
-    settings: { sidebarWidth: 260, sidebarCollapsed: false, requestPercent: 45 },
+    settings: {
+      sidebarWidth: 260,
+      sidebarCollapsed: false,
+      requestPercent: 45,
+      webdav: {
+        endpoint: "",
+        username: "",
+        password: "",
+        remotePath: "DBX/http-client/store.json",
+        userAgent: "",
+        autoSync: false
+      }
+    },
     storePath: "",
     storeDir: "",
     dirConfigured: false,
@@ -48,12 +60,19 @@
     return {
       id: util.uid("req"),
       name: t("tab.untitled"),
+      protocol: "http",
       method: "GET",
       url: "",
       headers: [],
       params: [],
       body: { mode: "none", raw: "", contentType: "application/json", fields: [] },
       auth: { type: "none", username: "", password: "", token: "", key: "", value: "", in: "header" },
+      grpc: {
+        target: "",
+        method: "",
+        plaintext: true,
+        authority: ""
+      },
       options: {
         timeoutMs: 30000,
         followRedirects: true,
@@ -399,6 +418,9 @@
 
   function requestTitle(tab) {
     if (tab.name && tab.name !== t("tab.untitled")) return tab.name;
+    if ((tab.protocol || "http") === "grpc") {
+      return (tab.grpc && tab.grpc.method) || tab.url || t("tab.untitled");
+    }
     if (!tab.url) return t("tab.untitled");
     try {
       const parsed = new URL(tab.url);
@@ -448,12 +470,14 @@
     return {
       id: tab.savedRequestId || util.uid("saved"),
       name: name || requestTitle(tab),
+      protocol: tab.protocol || "http",
       method: tab.method,
       url: tab.url,
       headers: JSON.parse(JSON.stringify(tab.headers || [])),
       params: JSON.parse(JSON.stringify(tab.params || [])),
       body: JSON.parse(JSON.stringify(tab.body || {})),
       auth: JSON.parse(JSON.stringify(tab.auth || {})),
+      grpc: JSON.parse(JSON.stringify(tab.grpc || emptyRequest().grpc)),
       options: JSON.parse(JSON.stringify(tab.options || {}))
     };
   }
@@ -479,11 +503,15 @@
     const existing = state.tabs.find((tab) => tab.savedRequestId === saved.id);
     if (existing) { setActiveTab(existing.id); return; }
     const tab = createTab({
-      name: saved.name, method: saved.method, url: saved.url,
+      name: saved.name,
+      protocol: saved.protocol || "http",
+      method: saved.method,
+      url: saved.url,
       headers: JSON.parse(JSON.stringify(saved.headers || [])),
       params: JSON.parse(JSON.stringify(saved.params || [])),
       body: Object.assign({ mode: "none", raw: "", fields: [] }, JSON.parse(JSON.stringify(saved.body || {}))),
       auth: Object.assign({ type: "none" }, JSON.parse(JSON.stringify(saved.auth || {}))),
+      grpc: Object.assign(emptyRequest().grpc, saved.grpc || {}),
       options: Object.assign(emptyRequest().options, saved.options || {}),
       collectionId: located.collection.id,
       folderId: located.parent ? located.parent.id : "",
@@ -601,12 +629,13 @@
   /* --------------------------------------------------------------- history -- */
 
   function pushHistory(tab, result) {
-    if (!tab.url) return;
+    if (!tab.url && !(tab.grpc && tab.grpc.target)) return;
+    const isGrpc = (tab.protocol || "http") === "grpc";
     state.history.unshift({
       id: util.uid("hist"),
       at: new Date().toISOString(),
-      method: tab.method,
-      url: tab.url,
+      method: isGrpc ? "gRPC" : tab.method,
+      url: isGrpc ? ((tab.grpc && tab.grpc.method) || tab.url) : tab.url,
       status: result && result.status ? result.status : 0,
       ok: !!(result && result.ok),
       durationMs: (result && result.durationMs) || 0,
@@ -628,11 +657,15 @@
     if (!entry) return;
     const saved = entry.snapshot;
     createTab({
-      name: requestTitle(saved), method: saved.method, url: saved.url,
+      name: requestTitle(saved),
+      protocol: saved.protocol || "http",
+      method: saved.method,
+      url: saved.url,
       headers: JSON.parse(JSON.stringify(saved.headers || [])),
       params: JSON.parse(JSON.stringify(saved.params || [])),
       body: JSON.parse(JSON.stringify(saved.body || {})),
       auth: JSON.parse(JSON.stringify(saved.auth || {})),
+      grpc: Object.assign(emptyRequest().grpc, saved.grpc || {}),
       options: Object.assign(emptyRequest().options, saved.options || {})
     });
     emit("request");
@@ -844,6 +877,19 @@
   function buildSpec(tab, requestId) {
     const vars = variableMap();
     const resolveText = (value) => resolve(value, vars);
+    if ((tab.protocol || "http") === "grpc") {
+      return {
+        requestId,
+        target: resolveText((tab.grpc && tab.grpc.target) || tab.url || "").trim(),
+        method: resolveText((tab.grpc && tab.grpc.method) || "").trim(),
+        bodyJson: resolveText((tab.body && tab.body.raw) || "{}"),
+        plaintext: !tab.grpc || tab.grpc.plaintext !== false,
+        verifyTls: tab.options.verifyTls !== false,
+        authority: resolveText((tab.grpc && tab.grpc.authority) || ""),
+        headers: activeRows(tab.headers).map((row) => ({ key: resolveText(row.key), value: resolveText(row.value), enabled: true })),
+        timeoutMs: Number(tab.options.timeoutMs) || 30000
+      };
+    }
     const spec = {
       requestId,
       method: tab.method,
@@ -909,9 +955,10 @@
       history: state.history,
       settings: state.settings,
       tabs: state.tabs.map((tab) => ({
-        name: tab.name, method: tab.method, url: tab.url, headers: tab.headers, params: tab.params,
-        body: tab.body, auth: tab.auth, options: tab.options, collectionId: tab.collectionId,
-        folderId: tab.folderId || "", savedRequestId: tab.savedRequestId, section: tab.section
+        name: tab.name, protocol: tab.protocol || "http", method: tab.method, url: tab.url,
+        headers: tab.headers, params: tab.params, body: tab.body, auth: tab.auth, grpc: tab.grpc,
+        options: tab.options, collectionId: tab.collectionId, folderId: tab.folderId || "",
+        savedRequestId: tab.savedRequestId, section: tab.section
       }))
     };
   }
@@ -922,7 +969,11 @@
     if (Array.isArray(document.environments)) state.environments = document.environments;
     if (Array.isArray(document.history)) state.history = document.history;
     if (document.activeEnvironmentId) state.activeEnvironmentId = document.activeEnvironmentId;
-    if (document.settings) Object.assign(state.settings, document.settings);
+    if (document.settings) {
+      const next = Object.assign({}, state.settings, document.settings);
+      next.webdav = Object.assign({}, state.settings.webdav || {}, (document.settings && document.settings.webdav) || {});
+      state.settings = next;
+    }
     if (document.storePath) state.storePath = document.storePath;
     if (Array.isArray(document.tabs) && document.tabs.length) {
       document.tabs.forEach((saved) => {

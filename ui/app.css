@@ -404,6 +404,18 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .hc-tag.m-PUT { color: var(--hc-info); }
 .hc-tag.m-PATCH { color: #a855f7; }
 .hc-tag.m-DELETE { color: var(--hc-error); }
+.hc-tag.m-GRPC { color: #0d9488; }
+
+.hc-protocol { width: 78px; flex: 0 0 auto; }
+.hc-subtitle { margin: 10px 0 0; font-size: 13px; font-weight: 600; }
+
+/* Dock surface: compact chrome for the bottom panel shortcut entry. */
+html[data-surface="dock"] .hc-topbar { padding: 4px 8px; }
+html[data-surface="dock"] .hc-brand-mark { width: 18px; height: 18px; }
+html[data-surface="dock"] .hc-tabstrip { padding: 2px 6px; }
+html[data-surface="dock"] .hc-url-row { gap: 6px; }
+html[data-surface="dock"] #btn-import-swagger,
+html[data-surface="dock"] #btn-import-curl { display: none; }
 
 /* --------------------------------------------------------- modal/toast ---- */
 

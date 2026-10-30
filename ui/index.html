@@ -19,6 +19,7 @@
           <span class="hc-field-label" id="label-environment">Environment</span>
           <select id="env-select" class="hc-select hc-select-flat"></select>
         </label>
+        <button class="hc-btn hc-btn-ghost" id="btn-import-swagger" type="button">Import OpenAPI</button>
         <button class="hc-btn hc-btn-ghost" id="btn-import-curl" type="button">Import cURL</button>
         <button class="hc-btn hc-btn-ghost" id="btn-settings" type="button">Settings</button>
       </header>
@@ -44,6 +45,10 @@
 
           <section class="hc-request" id="request-pane">
             <div class="hc-url-row">
+              <select id="protocol-select" class="hc-select hc-select-flat hc-protocol" aria-label="Protocol">
+                <option value="http">HTTP</option>
+                <option value="grpc">gRPC</option>
+              </select>
               <select id="method-select" class="hc-select hc-select-flat hc-method" aria-label="HTTP method"></select>
               <div class="hc-url-wrap">
                 <input id="url-input" class="hc-input hc-url" type="text" spellcheck="false" autocomplete="off"
@@ -57,6 +62,7 @@
                 <button class="hc-icon-btn hc-save-caret" id="btn-save-menu" type="button" title="Save as" aria-haspopup="menu">▾</button>
               </div>
               <button class="hc-icon-btn" id="btn-copy-curl" type="button" title="Copy as cURL">⌘</button>
+              <button class="hc-btn hc-btn-ghost hc-btn-sm" id="btn-grpc-reflect" type="button" hidden>Reflect</button>
             </div>
 
             <div class="hc-sections" id="request-sections"></div>
@@ -78,6 +84,7 @@
     <script src="download-name.js"></script>
     <script src="bridge.js"></script>
     <script src="curl.js"></script>
+    <script src="swagger.js"></script>
     <script src="store.js"></script>
     <script src="view-sidebar.js"></script>
     <script src="view-request.js"></script>

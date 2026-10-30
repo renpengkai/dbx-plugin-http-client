@@ -4,6 +4,7 @@
 release-candidates.json
 /.dbx-dev/
 /.uitest/
+/.tools/
 # `go build` in ./backend drops the sidecar binary here (name comes from
 # [backend] binary in dbx-plugin.toml) — it is a build artifact, never committed.
 /backend/dbx-plugin-http-client

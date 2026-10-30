@@ -581,18 +581,42 @@
     util.openModal({
       title: t("action.import"),
       render: (body) => {
-        body.append(el("div", { class: "hc-hint", text: t("side.importHint") }));
+        body.append(el("div", { class: "hc-hint", text: t("dialog.importMixedHint") }));
         body.append(textarea);
       },
       actions: [
         { label: t("action.cancel2"), onClick: (api) => api.close() },
         {
           label: t("action.import"), kind: "primary",
-          onClick: (api) => {
+          onClick: async (api) => {
             const text = textarea.value.trim();
             if (!text) return;
-            if (text.startsWith("{") || text.startsWith("[")) importJson(text);
-            else util.toast(t("toast.importJsonOnly"), "error");
+            if (HC.swagger && HC.swagger.looksLikeOpenAPI(text)) {
+              try {
+                const result = await HC.swagger.importDocument(text);
+                const collection = store.createCollection((result.collection && result.collection.name) || "OpenAPI");
+                (result.collection.requests || []).forEach((request) => {
+                  collection.requests.push(Object.assign({ id: util.uid("saved"), protocol: "http" }, request));
+                });
+                store.persist();
+                store.emit("sidebar");
+                util.toast(t("toast.imported", { count: result.count || collection.requests.length }), "success");
+                api.close();
+              } catch (error) {
+                util.toast(t("toast.importFailed", { message: (error && error.message) || String(error) }), "error");
+              }
+              return;
+            }
+            if (text.startsWith("{") || text.startsWith("[")) {
+              importJson(text);
+            } else {
+              const parsed = HC.curl.parseCurl(text);
+              if (!parsed) { util.toast(t("toast.importCurlFailed"), "error"); return; }
+              store.createTab(Object.assign(parsed.request, { name: parsed.request.name }));
+              HC.viewRequest.render();
+              HC.viewResponse.render();
+              util.toast(t("toast.imported", { count: 1 }), "success");
+            }
             api.close();
           }
         }

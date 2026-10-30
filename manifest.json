@@ -3,20 +3,25 @@
   "manifest_version": 1,
   "id": "com.jettech.httpclient",
   "name": "HTTP Client",
-  "version": "0.1.8",
+  "version": "0.2.0",
   "publisher": "jettech",
-  "description": "A Postman-style HTTP workbench: compose requests, send them through a native sidecar, and inspect responses.",
+  "description": "A Postman-style HTTP/gRPC workbench: compose requests, import OpenAPI, sync via WebDAV, and inspect responses.",
   "icon": "assets/plugin.svg",
   "source": "https://github.com/renpengkai/dbx-plugin-http-client",
   "homepage": "https://github.com/renpengkai/dbx-plugin-http-client#readme",
   "engines": {
-    "dbx": ">=0.5.68",
+    "dbx": ">=0.6.43",
     "host_api": "1"
   },
-  "permissions": ["host.events"],
+  "permissions": [
+    "host.events",
+    "host.workbench"
+  ],
   "entrypoints": {
     "backend": {
-      "protocol_versions": [1],
+      "protocol_versions": [
+        1
+      ],
       "transport": "stdio-jsonl",
       "executable": "bin/dbx-plugin-http-client"
     },
@@ -30,7 +35,7 @@
       "type": "workbench",
       "id": "com.jettech.httpclient.workbench",
       "label": "HTTP Client",
-      "description": "Compose and send HTTP requests, inspect responses, keep collections and environments.",
+      "description": "Compose and send HTTP/gRPC requests, import OpenAPI, sync collections via WebDAV.",
       "icon": "assets/plugin.svg"
     },
     {
@@ -41,7 +46,11 @@
       "icon": "assets/plugin.svg",
       "database_type": "httpclient",
       "workbench": "com.jettech.httpclient.workbench",
-      "capabilities": ["test", "connect", "disconnect"],
+      "capabilities": [
+        "test",
+        "connect",
+        "disconnect"
+      ],
       "fields": [
         {
           "key": "display_name",
@@ -65,16 +74,65 @@
           }
         }
       ]
+    },
+    {
+      "type": "command",
+      "id": "com.jettech.httpclient.open",
+      "label": "HTTP Client",
+      "description": "Open the HTTP Client in the bottom dock.",
+      "icon": "assets/plugin.svg",
+      "action": {
+        "type": "open-workbench",
+        "workbench": "com.jettech.httpclient.workbench",
+        "presentation": "panel"
+      }
+    },
+    {
+      "type": "command",
+      "id": "com.jettech.httpclient.openTab",
+      "label": "HTTP Client (Tab)",
+      "description": "Open the HTTP Client as a workbench tab.",
+      "icon": "assets/plugin.svg",
+      "action": {
+        "type": "open-workbench",
+        "workbench": "com.jettech.httpclient.workbench",
+        "presentation": "tab"
+      }
+    },
+    {
+      "type": "menus",
+      "id": "com.jettech.httpclient.menus",
+      "items": [
+        {
+          "location": "appToolbar",
+          "command": "com.jettech.httpclient.open",
+          "group": "plugins",
+          "order": 20,
+          "default_visible": true
+        },
+        {
+          "location": "commandPalette",
+          "command": "com.jettech.httpclient.open",
+          "group": "plugins",
+          "order": 20
+        },
+        {
+          "location": "commandPalette",
+          "command": "com.jettech.httpclient.openTab",
+          "group": "plugins",
+          "order": 21
+        }
+      ]
     }
   ],
   "localizations": {
     "zh-CN": {
       "name": "HTTP 客户端",
-      "description": "类似 Postman 的 HTTP 接口调试工作台：构造请求、通过原生 Sidecar 发送并查看响应。",
+      "description": "类似 Postman 的 HTTP/gRPC 接口调试工作台：构造请求、导入 OpenAPI、经 WebDAV 同步，并通过原生 Sidecar 发送并查看响应。",
       "contributions": {
         "com.jettech.httpclient.workbench": {
           "label": "HTTP 客户端",
-          "description": "构造并发送 HTTP 请求、查看响应，管理集合与环境变量。"
+          "description": "构造并发送 HTTP/gRPC 请求、导入 OpenAPI、经 WebDAV 同步集合与环境。"
         },
         "com.jettech.httpclient.connection": {
           "label": "HTTP 客户端",
@@ -90,6 +148,14 @@
               "placeholder": "例如：/data/dbx-http-client 或 D:\\dbx-http-client"
             }
           }
+        },
+        "com.jettech.httpclient.open": {
+          "label": "HTTP 客户端",
+          "description": "在底部 Dock 面板中打开 HTTP 客户端。"
+        },
+        "com.jettech.httpclient.openTab": {
+          "label": "HTTP 客户端（标签页）",
+          "description": "以工作台标签页打开 HTTP 客户端。"
         }
       }
     }

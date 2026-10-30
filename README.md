@@ -1,12 +1,13 @@
 # HTTP Client — DBX 插件
 
-一个类似 Postman 的 DBX 工作台插件：构造 HTTP 请求、通过原生 Sidecar 发送、查看结构化响应，
-并管理集合、环境变量与历史记录。
+一个类似 Postman 的 DBX 工作台插件：构造 HTTP / gRPC 请求、导入 OpenAPI、经 WebDAV 同步，
+通过原生 Sidecar 发送并查看结构化响应，同时管理集合、环境变量与历史记录。
 
 - 插件 ID：`com.jettech.httpclient`
-- 贡献点：`workbench`（`com.jettech.httpclient.workbench`）、`connection-provider`（`com.jettech.httpclient.connection`）
+- 贡献点：`workbench`（`com.jettech.httpclient.workbench`）、`connection-provider`（`com.jettech.httpclient.connection`）、Dock 快捷命令（`presentation: panel`）+ `appToolbar` / 命令面板
 - 入口：`ui/index.html` + `bin/dbx-plugin-http-client`（Go Sidecar）
-- 权限：`host.events`（仅用于接收 Sidecar 的下载进度事件）
+- 权限：`host.events`、`host.workbench`
+- 版本：`0.2.0`（需 DBX `>=0.6.43`）
 
 ---
 
@@ -48,6 +49,8 @@ dbx-http-client/
 │   ├── bridge.js                  # window.dbxPlugin 封装（唯一的宿主边界）
 │   ├── store.js                   # 状态、持久化、集合/环境/历史、{{变量}} 解析
 │   ├── curl.js                    # cURL 导入 / 导出
+│   ├── swagger.js                 # OpenAPI / Swagger 检测与导入
+│   ├── download-name.js           # 下载文件名规则（与 backend/filename.go 对齐）
 │   ├── view-sidebar.js            # 集合、历史、环境
 │   ├── view-request.js            # 参数 / 请求头 / 请求体 / 认证 / 选项
 │   ├── view-response.js           # 状态行、响应体、响应头、Cookie、请求回显
@@ -57,7 +60,11 @@ dbx-http-client/
 │   ├── request.go                 # 请求模型、URL/请求体/认证构造、代理解析
 │   ├── execute.go                 # 执行、跳转链、错误分类、响应体仓库、分块读取
 │   ├── filename.go                # 下载文件名：Content-Disposition / Content-Type / URL
+│   ├── grpc.go                    # gRPC 反射与一元调用（grpcurl）
+│   ├── openapi.go                 # OpenAPI / Swagger 导入（JSON/YAML）
+│   ├── webdav.go                  # WebDAV 测试 / 上传 / 下载
 │   ├── store.go                   # 配置持久化（0600，原子写）
+│   ├── third_party/dbx-plugin-sdk # 本地 replace 的官方 Go SDK
 │   └── go.mod
 ├── tools/                         # 测试脚手架（不属于发布产物）
 │   ├── sidecar-smoke-test.py      # 协议级冒烟测试：直连 Sidecar 跑 52 项断言
@@ -93,6 +100,27 @@ dbx-http-client/
 - 超过 256 KiB 的预览会明确标注，可**分块加载完整响应**或让 Sidecar **直接保存到文件**。文件名优先用 `Content-Disposition` 的 `filename*` / `filename`，否则用 URL 末段配合 `Content-Type`，最后才是 `download` 加正确后缀
 - 失败时渲染错误卡片：类型（超时 / 取消 / DNS / TLS / 连接 / URL 无效 / 网络）+ 原始报文
 
+**gRPC**
+
+- 协议切换 HTTP / gRPC；地址栏填 `host:port`，方法形如 `package.Service/Method`
+- 通过 gRPC Server Reflection 列出服务与方法；请求消息用 JSON，由 Sidecar 编码为 protobuf
+- Metadata 复用请求头编辑器；支持明文（h2c）与 TLS（可跳过证书校验）
+
+**OpenAPI / Swagger**
+
+- 顶栏「导入 OpenAPI」或侧栏导入区粘贴 OpenAPI 3 / Swagger 2（JSON / YAML）
+- 按 `paths` 生成集合请求，可覆盖 Base URL
+
+**WebDAV 同步**
+
+- 设置面板配置 Endpoint / 账号 / 远端路径（默认 `DBX/http-client/store.json`）
+- 测试连接、上传快照、下载覆盖；可选启动后自动上传
+
+**Dock 快捷入口**
+
+- Manifest 声明 `command`（`presentation: "panel"`）与 `menus.appToolbar`，出现在 DBX 插件快捷栏
+- `context.surface === "dock"` 时启用紧凑布局（默认折叠侧栏）
+
 **组织与复用**
 
 - 集合：多级子集合、移动、展开/折叠，保存 / 重命名 / 删除 / 复制，JSON 导入导出。行内操作收进悬停或选中时出现的「⋯」菜单（右键同样可用），长名称省略并用提示显示全文。删除集合或子集合会级联删除其中的子集合和请求，确认文案写明数量。0.1.2 之前的扁平 `requests` 会在读取时迁到 `items`。侧栏顶部可按名称、URL、方法即时搜索，匹配项高亮并自动展开父级；清空后恢复原来的展开状态
@@ -120,6 +148,12 @@ Sidecar 通过 stdout 的 JSON Lines 收发 protocol v1 报文；stdout 只留�
 | `store/load` | — | `{ path, dir, configured, store, exists }` |
 | `store/save` | `{ store, storage_dir? }` | `{ path, dir, configured, bytes, savedAt }` |
 | `store/setDir` | `{ dir }` | `{ dir, path, configured }`（先探测可写再切换） |
+| `grpc/reflect` | `{ target, plaintext?, verifyTls?, authority?, headers[], timeoutMs? }` | `{ ok, target, services[{ name, methods[{ name, fullName }] }] }` |
+| `grpc/send` | `{ requestId, target, method, bodyJson, plaintext?, verifyTls?, authority?, headers[], timeoutMs? }` | 同 `sendResult`（`httpVersion: "gRPC"`） |
+| `openapi/import` | `{ document, baseUrl?, collectionName? }` | `{ ok, collection, count, info }` |
+| `sync/webdav/test` | `{ endpoint, username?, password?, remotePath?, userAgent? }` | `{ ok, status, remoteUrl, remotePath }` |
+| `sync/webdav/upload` | 同上 + `{ store }` | `{ ok, status, bytes, remoteUrl, uploadedAt }` |
+| `sync/webdav/download` | WebDAV 配置 | `{ ok, store, bytes, remoteUrl, downloadedAt }` |
 
 `body.mode`：`none` | `raw` | `urlencoded` | `formdata`；`fields[].kind`：`text` | `file`。
 文件字段另带 `fileName`、`contentType`、`dataBase64`。Sidecar 用这些字段写 multipart part：`Content-Disposition` 含 `filename`，`Content-Type` 用字段上的安全媒体类型，否则按内容探测。
@@ -265,7 +299,7 @@ replacer**（`replace(pattern, () => payload)`）——若用字符串替换，�
   需要绕过时在「选项」里切换为「直连」。
 - **凭证为本机明文**：环境变量与认证字段保存在 0600 配置文件中，不会上传；共享机器上请勿放入生产凭证。
 - **TLS 校验可关闭**：关闭时错误卡片与选项面板都会提示，仅用于自签名调试。
-- **未实现**：Cookie 会话保持、请求脚本/前置后置处理器、OAuth2、WebSocket/gRPC、证书文件导入、
+- **未实现**：Cookie 会话保持、请求脚本/前置后置处理器、OAuth2、WebSocket、gRPC 流式（仅一元调用 + Reflection）、证书文件导入、
   大文件流式上传。
 
 ## 10. 排错
@@ -274,7 +308,7 @@ replacer**（`replace(pattern, () => payload)`）——若用字符串替换，�
 | --- | --- |
 | 发送按钮置灰、提示「Sidecar 后端不可用」 | 未在 DBX 中打开工作台（例如直接用浏览器打开了 `ui/index.html`），或后端未构建 |
 | `Cannot start sidecar executable` | `bin/dbx-plugin-http-client` 不存在：先 `dbx-plugin package .` 或按第 6 节本地构建 |
-| 打包时 Go 编译报找不到 SDK | 使用官方 CLI 打包（它会通过 `go.work` 注入随包 SDK），不要在 `go.mod` 里写本地 `replace` |
+| 打包时 Go 编译报找不到 SDK | 本仓库用 `backend/third_party/dbx-plugin-sdk` + `go.mod` 的 `replace` 做离线构建；官方 CLI 打包也会通过 `go.work` 注入随包 SDK |
 | 工作台整个被一层黑色遮罩盖住、点不动 | 浮层容器 `.hc-modal-layer` 设了 `display: grid`，压过了浏览器默认的 `[hidden] { display: none }`；`app.css` 里那条 `[hidden] { display: none !important; }` 全局复位被删掉了 |
 | 改了 `ui/` 下的文件但页面没变 | dev host 的文件监听只覆盖后端源码与 `manifest.json`，不监听 `ui/`；手动刷新页面即可（每次构建 frame 都会重新从磁盘读取资源） |
 | CSP 报错、界面空白 | 确认 `ui/` 内没有引用 CDN、外链字体或 ES module 之间的相对导入（宿主会把本地脚本内联为 `<script>`） |

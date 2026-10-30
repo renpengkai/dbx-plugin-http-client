@@ -258,6 +258,30 @@
     });
   }
 
+  async function grpcReflect(spec) {
+    return invoke("grpc/reflect", spec, sendTimeoutFor({ options: spec }));
+  }
+
+  async function grpcSend(spec) {
+    return invoke("grpc/send", spec, sendTimeoutFor({ options: { timeoutMs: spec.timeoutMs } }));
+  }
+
+  async function openapiImport(payload) {
+    return invoke("openapi/import", payload, 30000);
+  }
+
+  async function webdavTest(config) {
+    return invoke("sync/webdav/test", config, 45000);
+  }
+
+  async function webdavUpload(config, store) {
+    return invoke("sync/webdav/upload", Object.assign({}, config, { store }), 60000);
+  }
+
+  async function webdavDownload(config) {
+    return invoke("sync/webdav/download", config, 60000);
+  }
+
   async function copy(text) {
     if (plugin && plugin.copy) {
       try {
@@ -294,6 +318,12 @@
     setStoreDir,
     saveTextFile,
     pickTextFile,
+    grpcReflect,
+    grpcSend,
+    openapiImport,
+    webdavTest,
+    webdavUpload,
+    webdavDownload,
     copy,
     MAX_INVOKE_TIMEOUT
   };
