@@ -79,12 +79,12 @@
       "type": "command",
       "id": "com.jettech.httpclient.open",
       "label": "HTTP Client",
-      "description": "Open the HTTP Client in the bottom dock.",
+      "description": "Open the HTTP Client as a workbench tab.",
       "icon": "assets/plugin.svg",
       "action": {
         "type": "open-workbench",
         "workbench": "com.jettech.httpclient.workbench",
-        "presentation": "panel"
+        "presentation": "tab"
       }
     },
     {
@@ -151,7 +151,7 @@
         },
         "com.jettech.httpclient.open": {
           "label": "HTTP 客户端",
-          "description": "在底部 Dock 面板中打开 HTTP 客户端。"
+          "description": "以工作台标签页打开 HTTP 客户端。"
         },
         "com.jettech.httpclient.open-tab": {
           "label": "HTTP 客户端（标签页）",
