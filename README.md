@@ -4,7 +4,7 @@
 通过原生 Sidecar 发送并查看结构化响应，同时管理集合、环境变量与历史记录。
 
 - 插件 ID：`com.jettech.httpclient`
-- 贡献点：`workbench`（`com.jettech.httpclient.workbench`）、`connection-provider`（`com.jettech.httpclient.connection`）、Dock 快捷命令（`presentation: panel`）+ `appToolbar` / 命令面板
+- 贡献点：`workbench`（`com.jettech.httpclient.workbench`）、`connection-provider`（`com.jettech.httpclient.connection`）、标签页快捷命令（`presentation: tab`）+ `appToolbar` / 命令面板
 - 入口：`ui/index.html` + `bin/dbx-plugin-http-client`（Go Sidecar）
 - 权限：`host.events`、`host.workbench`
 - 版本：`0.2.1`（需 DBX `>=0.6.43`）
@@ -116,10 +116,10 @@ dbx-http-client/
 - 设置面板配置 Endpoint / 账号 / 远端路径（默认 `DBX/http-client/store.json`）
 - 测试连接、上传快照、下载覆盖；可选启动后自动上传
 
-**Dock 快捷入口**
+**标签页入口**
 
-- Manifest 声明 `command`（`presentation: "panel"`）与 `menus.appToolbar`，出现在 DBX 插件快捷栏
-- `context.surface === "dock"` 时启用紧凑布局（默认折叠侧栏）
+- Manifest 声明 `command`（`presentation: "tab"`）与 `menus.appToolbar`，出现在 DBX 插件快捷栏，点击以新标签页打开
+- `context.surface === "dock"` 时仍启用紧凑布局做兼容（默认折叠侧栏）
 
 **组织与复用**
 
