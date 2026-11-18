@@ -1,5 +1,5 @@
 name: Release DBX plugin
-
+workflow_dispatch:
 on:
   release:
     types: [published]
