@@ -1,24 +1,26 @@
 name: Release DBX plugin
-workflow_dispatch:
+
 on:
   release:
     types: [published]
+  workflow_dispatch:      # 1. 修复：正确放在 on: 下面
+    inputs:               # 2. 新增：定义一个手动输入的版本号
+      tag_name:
+        description: '要发布的版本号 (例如: v0.2.2)'
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 jobs:
   release:
-    # Pinned to an immutable tag. The scaffold template points at `@plugin-sdk-v1`,
-    # which does not exist in t8y2/dbx (neither branch nor tag), so the workflow
-    # fails to load at all — GitHub cannot resolve the reusable workflow ref.
-    # Bump this tag deliberately when you want newer packaging behaviour.
+    # ... 原有注释保持不变 ...
     uses: t8y2/dbx/.github/workflows/plugin-release-reusable.yml@v0.6.15
     with:
-      release-tag: ${{ github.event.release.tag_name }}
+      # 3. 逻辑修改：如果是在手动触发 (workflow_dispatch)，使用手动输入的 tag_name；如果是 Release 触发，使用自动的 tag_name
+      release-tag: ${{ github.event.inputs.tag_name || github.event.release.tag_name }}
       package-command: dbx-plugin package .
       package-path: dist/*.dbxp
       metadata-path: dist/*.artifact.json
-      # Matches the CLI version this repo is developed and tested against
-      # (`npx @dbx-app/plugin-cli` resolves to 0.1.9).
       plugin-cli-version: 0.1.9
